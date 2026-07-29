@@ -899,6 +899,60 @@ export async function fetchRatings(publicKey: string) {
 
 // ─── Recommendations ──────────────────────────────────────────────────────────
 
+export interface RankedJob extends Job {
+  matchScore: number;
+  rankingSource?: "ml" | "baseline";
+  predictions?: {
+    completionProb: number;
+    expectedRating: number;
+    estimatedDays: number;
+  };
+  isExploration?: boolean;
+}
+
+export interface RankedFreelancer extends UserProfile {
+  matchScore: number;
+  rankingSource?: "ml" | "baseline";
+  predictions?: {
+    completionProb: number;
+    expectedRating: number;
+    estimatedDays: number;
+  };
+  isExploration?: boolean;
+}
+
+export interface RankingMeta {
+  source: "ml" | "baseline";
+  reason?: string;
+  latencyMs?: number;
+  withinBudget?: boolean;
+  shadowMode?: boolean;
+}
+
+export async function fetchMlRankedJobs(
+  publicKey: string,
+  limit = 10,
+): Promise<{ jobs: RankedJob[]; meta: RankingMeta }> {
+  const { data } = await api.get<{
+    success: boolean;
+    data: RankedJob[];
+    meta: RankingMeta;
+  }>(`/api/ranking/jobs/${encodeURIComponent(publicKey)}`, { params: { limit } });
+  return { jobs: data.data, meta: data.meta };
+}
+
+export async function fetchMlRankedFreelancers(
+  jobId: string,
+  limit = 12,
+): Promise<{ freelancers: RankedFreelancer[]; meta: RankingMeta }> {
+  const { data } = await api.get<{
+    success: boolean;
+    data: RankedFreelancer[];
+    meta: RankingMeta;
+  }>(`/api/ranking/freelancers/${encodeURIComponent(jobId)}`, { params: { limit } });
+  return { freelancers: data.data, meta: data.meta };
+}
+
 export async function fetchRecommendedJobs(
   publicKey: string,
 ): Promise<(Job & { matchScore: number })[]> {

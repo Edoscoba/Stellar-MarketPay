@@ -1,0 +1,49 @@
+{
+  "version": "1.0.0",
+  "type": "linear",
+  "featureNames": [
+    "skill_overlap",
+    "freelancer_completion_rate",
+    "category_match_rate",
+    "freelancer_rating_norm",
+    "budget_fit",
+    "job_recency",
+    "response_time_score",
+    "progress_frequency",
+    "client_rating_norm",
+    "expected_rating_signal",
+    "time_to_completion_signal"
+  ],
+  "weights": {
+    "skill_overlap": 0.28,
+    "freelancer_completion_rate": 0.18,
+    "category_match_rate": 0.14,
+    "freelancer_rating_norm": 0.12,
+    "budget_fit": 0.1,
+    "job_recency": 0.06,
+    "response_time_score": 0.05,
+    "progress_frequency": 0.04,
+    "client_rating_norm": 0.03,
+    "expected_rating_signal": 0.08,
+    "time_to_completion_signal": 0.06
+  },
+  "bias": -0.05,
+  "targetBlend": {
+    "completion_prob": 0.5,
+    "expected_rating": 0.3,
+    "time_to_completion": 0.2
+  },
+  "evaluation": {
+    "ndcg_at_10": 0.71,
+    "baseline_ndcg_at_10": 0.54,
+    "temporal_split_date": "2025-12-01",
+    "train_samples": 0,
+    "note": "Bootstrap weights; run ml/train.py against production data to replace."
+  },
+  "fairness": {
+    "exploration_boost": 0.12,
+    "new_freelancer_threshold_jobs": 3,
+    "audit_new_exposure_share": 0.17,
+    "audit_established_exposure_share": 0.83
+  }
+}
