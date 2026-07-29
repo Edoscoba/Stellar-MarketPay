@@ -31,6 +31,12 @@ This page is the single reference for runtime configuration in Stellar MarketPay
 | `FASTLY_SERVICE_ID` | No | Empty | Fastly service ID for purge-by-surrogate-key/URL calls. | `SU1Z...` |
 | `FASTLY_API_TOKEN` | No | Empty | Fastly API token with purge permission. | `abcd...` |
 | `CDN_WEBHOOK_SECRET` | No (required in production) | Empty | HMAC secret validating `POST /api/cdn/webhook` requests. | `long-random-secret` |
+| `ML_RANKING_ENABLED` | No | `true` | Enable ML ranking endpoints; set `false` to force baseline fallback. | `true` |
+| `ML_RANKING_SHADOW_MODE` | No | `false` | Log ML vs baseline rankings to `ml_ranking_shadow_events` for A/B analysis. | `true` |
+| `ML_RANKING_LATENCY_BUDGET_MS` | No | `200` | Latency budget (ms) for ranking requests; exceeded budgets are logged. | `200` |
+| `ML_RANKING_COLD_START_MIN_HISTORY` | No | `2` | Minimum completed jobs before ML ranking is used for a freelancer. | `2` |
+| `ML_RANKING_EXPLORATION_BUDGET` | No | `0.15` | Fraction of ranking slots reserved for new-freelancer exploration. | `0.15` |
+| `ML_RANKING_MODEL_PATH` | No | `backend/src/ml/defaultModel.json` | Path to exported model artifact from `ml/train.py`. | `/app/backend/src/ml/defaultModel.json` |
 
 ## Frontend
 

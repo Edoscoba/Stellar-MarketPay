@@ -9,12 +9,18 @@ import type { UserProfile } from "@/utils/types";
 
 interface FreelancerCardProps {
   profile: UserProfile;
+  matchScore?: number;
 }
 
-export default function FreelancerCard({ profile }: FreelancerCardProps) {
+export default function FreelancerCard({ profile, matchScore }: FreelancerCardProps) {
   return (
     <Link href={`/freelancers/${encodeURIComponent(profile.publicKey)}`}>
-      <div className="card-hover group flex h-full flex-col justify-between gap-4 p-5 transition-shadow hover:shadow-xl">
+      <div className="card-hover group relative flex h-full flex-col justify-between gap-4 p-5 transition-shadow hover:shadow-xl">
+        {matchScore != null && matchScore > 0 && (
+          <span className="absolute top-3 right-3 bg-market-500/20 text-market-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-market-500/30">
+            {matchScore}% match
+          </span>
+        )}
         <div className="space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div>

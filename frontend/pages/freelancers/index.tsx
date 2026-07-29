@@ -1,10 +1,11 @@
 /**
  * pages/freelancers/index.tsx
- * Browse freelancers with availability status filtering.
+ * Browse freelancers with availability status filtering and optional ML ranking for a job.
  */
 import Head from "next/head";
 import { useEffect, useState } from "react";
-import { fetchProfiles } from "@/lib/api";
+import { useRouter } from "next/router";
+import { fetchProfiles, fetchMlRankedFreelancers, type RankedFreelancer } from "@/lib/api";
 import FreelancerCard from "@/components/FreelancerCard";
 import { availabilityStatusLabel } from "@/utils/format";
 import type { AvailabilityStatus, UserProfile } from "@/utils/types";
@@ -17,11 +18,14 @@ const availabilityOptions = [
 ];
 
 export default function FreelancersBrowsePage() {
-  const [profiles, setProfiles] = useState<UserProfile[]>([]);
+  const router = useRouter();
+  const jobId = typeof router.query.jobId === "string" ? router.query.jobId : undefined;
+  const [profiles, setProfiles] = useState<(UserProfile | RankedFreelancer)[]>([]);
   const [search, setSearch] = useState("");
   const [availability, setAvailability] = useState<AvailabilityStatus | "">();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [rankingSource, setRankingSource] = useState<"ml" | "baseline" | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,6 +34,15 @@ export default function FreelancersBrowsePage() {
       setError(null);
 
       try {
+        if (jobId) {
+          const { freelancers, meta } = await fetchMlRankedFreelancers(jobId, 24);
+          if (!cancelled) {
+            setProfiles(freelancers);
+            setRankingSource(meta.source);
+          }
+          return;
+        }
+
         const results = await fetchProfiles({
           role: "freelancer",
           availability: availability || undefined,
@@ -38,9 +51,25 @@ export default function FreelancersBrowsePage() {
         });
         if (!cancelled) {
           setProfiles(results);
+          setRankingSource(null);
         }
       } catch (err) {
         if (!cancelled) {
+          if (jobId) {
+            try {
+              const results = await fetchProfiles({
+                role: "freelancer",
+                availability: availability || undefined,
+                search: search || undefined,
+                limit: 60,
+              });
+              setProfiles(results);
+              setRankingSource("baseline");
+              return;
+            } catch {
+              // fall through
+            }
+          }
           setError(err instanceof Error ? err.message : "Failed to load freelancers");
         }
       } finally {
@@ -54,7 +83,7 @@ export default function FreelancersBrowsePage() {
     return () => {
       cancelled = true;
     };
-  }, [availability, search]);
+  }, [availability, search, jobId]);
 
   return (
     <>
@@ -67,11 +96,13 @@ export default function FreelancersBrowsePage() {
           <div>
             <p className="text-sm uppercase tracking-[0.3em] text-amber-400/80">Freelancers</p>
             <h1 className="font-display text-4xl font-semibold text-amber-100 sm:text-5xl">
-              Browse talent by availability.
+              {jobId ? "Top-matched freelancers for your job." : "Browse talent by availability."}
             </h1>
           </div>
           <p className="max-w-2xl text-amber-300 text-sm leading-6">
-            Filter freelancers by availability status and search skills, names, or account IDs.
+            {jobId
+              ? "Rankings use historical completion, ratings, and skill overlap. Falls back to search if the model is unavailable."
+              : "Filter freelancers by availability status and search skills, names, or account IDs."}
           </p>
         </div>
 
@@ -113,7 +144,13 @@ export default function FreelancersBrowsePage() {
               <div>
                 <p className="text-sm text-amber-400">{profiles.length} freelancers</p>
                 <p className="text-amber-300 text-sm">
-                  {availability ? availabilityStatusLabel(availability) : "Showing all freelancers"}
+                  {jobId
+                    ? rankingSource === "ml"
+                      ? "ML-ranked by predicted job fit"
+                      : "Showing search results (ranking unavailable)"
+                    : availability
+                      ? availabilityStatusLabel(availability)
+                      : "Showing all freelancers"}
                 </p>
               </div>
             </div>
@@ -129,7 +166,11 @@ export default function FreelancersBrowsePage() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {profiles.map((profile) => (
-                  <FreelancerCard key={profile.publicKey} profile={profile} />
+                  <FreelancerCard
+                    key={profile.publicKey}
+                    profile={profile}
+                    matchScore={"matchScore" in profile ? profile.matchScore : undefined}
+                  />
                 ))}
               </div>
             )}

@@ -3,7 +3,7 @@
  * Browse all open jobs with category filtering and search autocomplete.
  */
 import JobCard, { JobCardSkeleton } from "@/components/JobCard";
-import { fetchJobs, fetchRecommendedJobs, fetchJobSuggestions, type JobSuggestion as APISuggestion } from "@/lib/api";
+import { fetchJobs, fetchMlRankedJobs, fetchRecommendedJobs, fetchJobSuggestions, type JobSuggestion as APISuggestion, type RankedJob } from "@/lib/api";
 import StateMessage from "@/components/StateMessage";
 import { JOB_CATEGORIES, CATEGORY_ICONS, categoryToSlug } from "@/utils/format";
 import type { Job } from "@/utils/types";
@@ -63,7 +63,8 @@ export default function JobsPage({ publicKey }: { publicKey?: string | null }) {
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
-  const [recommended, setRecommended] = useState<(Job & { matchScore: number })[]>([]);
+  const [recommended, setRecommended] = useState<RankedJob[]>([]);
+  const [rankingSource, setRankingSource] = useState<"ml" | "baseline" | null>(null);
   const [recLoading, setRecLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -236,13 +237,26 @@ export default function JobsPage({ publicKey }: { publicKey?: string | null }) {
     }).catch(() => {});
   }, []);
 
-  // Fetch recommended jobs when wallet is connected
+  // Fetch ML-ranked jobs when wallet is connected (fallback to legacy recommendations)
   useEffect(() => {
-    if (!publicKey) { setRecommended([]); return; }
+    if (!publicKey) { setRecommended([]); setRankingSource(null); return; }
     setRecLoading(true);
-    fetchRecommendedJobs(publicKey)
-      .then(setRecommended)
-      .catch(() => setRecommended([]))
+    fetchMlRankedJobs(publicKey, 6)
+      .then(({ jobs, meta }) => {
+        setRecommended(jobs);
+        setRankingSource(meta.source);
+      })
+      .catch(() =>
+        fetchRecommendedJobs(publicKey)
+          .then((jobs) => {
+            setRecommended(jobs);
+            setRankingSource("baseline");
+          })
+          .catch(() => {
+            setRecommended([]);
+            setRankingSource(null);
+          }),
+      )
       .finally(() => setRecLoading(false));
   }, [publicKey]);
 
@@ -523,7 +537,14 @@ export default function JobsPage({ publicKey }: { publicKey?: string | null }) {
       {/* Recommended for you */}
       {publicKey && (recLoading || recommended.length > 0) && (
         <div className="mb-10">
-          <h2 className="font-display text-xl font-bold text-amber-100 mb-4">{t("jobs.recommended")}</h2>
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="font-display text-xl font-bold text-amber-100">{t("jobs.recommended")}</h2>
+            {rankingSource === "ml" && (
+              <span className="text-[10px] uppercase tracking-wider text-market-400/80 border border-market-500/20 px-2 py-0.5 rounded-full">
+                ML ranked
+              </span>
+            )}
+          </div>
           {recLoading ? (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {Array.from({ length: 3 }).map((_, i) => <JobCardSkeleton key={`rec-skeleton-${i}`} />)}
