@@ -13,6 +13,9 @@ const { uploadFile, getGatewayUrl, MAX_FILE_SIZE } = require("../services/ipfsSe
 const profileUpdateRateLimiter = createRateLimiter(5, 1); // 5 profile updates per minute
 const generalProfileRateLimiter = createRateLimiter(30, 1); // 100 requests per minute for getting profiles
 const cache = require("../services/cacheService");
+const { edgeCacheControl, CONTENT_TYPES } = require("../middleware/edgeCacheControl");
+const { coalesce } = require("../middleware/requestCoalescer");
+const { surrogateKeysForProfile } = require("../services/cdn/cacheStrategy");
 
 const {
   getProfile,
@@ -48,21 +51,31 @@ router.get("/", generalProfileRateLimiter, async (req, res, next) => {
   }
 });
 
-router.get("/:publicKey", generalProfileRateLimiter, async (req, res, next) => {
-  try {
-    const key = cache.profileKey(req.params.publicKey);
-    const cached = await cache.get(key);
-    if (cached) {
-      res.set("X-Cache", "HIT");
-      return res.json({ success: true, data: cached });
+router.get(
+  "/:publicKey",
+  generalProfileRateLimiter,
+  edgeCacheControl(CONTENT_TYPES.SEMI_DYNAMIC, { surrogateKeys: (req) => surrogateKeysForProfile(req.params.publicKey) }),
+  async (req, res, next) => {
+    try {
+      const key = cache.profileKey(req.params.publicKey);
+      const cached = await cache.get(key);
+      if (cached) {
+        res.set("X-Cache", "HIT");
+        return res.json({ success: true, data: cached });
+      }
+      // Stampede protection: concurrent misses for the same profile (e.g.
+      // right after an invalidation) share one origin fetch.
+      const data = await coalesce(key, async () => {
+        const fetched = await getProfile(req.params.publicKey);
+        await cache.set(key, fetched, cache.TTL.PROFILE);
+        return fetched;
+      });
+      res.set("X-Cache", "MISS");
+      res.json({ success: true, data });
     }
-    const data = await getProfile(req.params.publicKey);
-    await cache.set(key, data, cache.TTL.PROFILE);
-    res.set("X-Cache", "MISS");
-    res.json({ success: true, data });
+    catch (e) { next(e); }
   }
-  catch (e) { next(e); }
-});
+);
 
 router.get("/:publicKey/stats", generalProfileRateLimiter, async (req, res, next) => {
   try { res.json({ success: true, data: await getProfileStats(req.params.publicKey) }); }

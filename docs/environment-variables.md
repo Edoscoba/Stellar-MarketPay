@@ -24,6 +24,13 @@ This page is the single reference for runtime configuration in Stellar MarketPay
 | `PINATA_SECRET_KEY` | No | Empty | Pinata secret key for IPFS uploads. | `pinata-secret` |
 | `PINATA_API_URL` | No | `https://api.pinata.cloud` | Override for the Pinata API base URL. | `https://api.pinata.cloud` |
 | `ESCROW_CONTRACT_ID` | No | Empty | Legacy alias for `CONTRACT_ID`; kept for backward compatibility. | `C...` |
+| `PUBLIC_BASE_URL` | No | `https://app.stellar-marketpay.example` | Public origin the CDN fronts; used to build the URLs purged on contract events. See [CDN Strategy](./CDN_STRATEGY.md). | `https://app.example.com` |
+| `CDN_PROVIDER_ORDER` | No | `cloudflare,fastly` | Ordered CDN failover chain. A vendor is only used if its credentials below are set; falls back to an in-memory mock provider otherwise. | `cloudflare,fastly` |
+| `CLOUDFLARE_ZONE_ID` | No | Empty | Cloudflare zone ID for cache purge API calls. | `023e...` |
+| `CLOUDFLARE_API_TOKEN` | No | Empty | Cloudflare API token with `Zone.Cache Purge` permission. | `abcd...` |
+| `FASTLY_SERVICE_ID` | No | Empty | Fastly service ID for purge-by-surrogate-key/URL calls. | `SU1Z...` |
+| `FASTLY_API_TOKEN` | No | Empty | Fastly API token with purge permission. | `abcd...` |
+| `CDN_WEBHOOK_SECRET` | No (required in production) | Empty | HMAC secret validating `POST /api/cdn/webhook` requests. | `long-random-secret` |
 
 ## Frontend
 

@@ -33,10 +33,11 @@ function isDonation(op, platformWallet) {
 }
 
 class IndexerService {
-  constructor({ platformWallet, horizonUrl, contractId, broadcast = () => {} }) {
+  constructor({ platformWallet, horizonUrl, contractId, broadcast = () => {}, cdnInvalidation = null }) {
     this.platformWallet = platformWallet;
     this.horizonUrl = horizonUrl || "https://horizon-testnet.stellar.org";
     this.broadcast = broadcast;
+    this.cdnInvalidation = cdnInvalidation;
     this.horizon = new Horizon.Server(this.horizonUrl);
     this.syncState = {
       running: false,
@@ -308,6 +309,18 @@ class IndexerService {
     }
 
     this.broadcast("contract:event", { jobId, eventType, txHash: event.transaction_hash });
+
+    if (this.cdnInvalidation) {
+      // Fire-and-forget: CDN purge latency (SLA < 5s, see docs/CDN_STRATEGY.md)
+      // must never add to ledger-processing latency. Failures are logged —
+      // the origin's own Redis cache is already busted synchronously inside
+      // handleContractEvent() before the CDN purge is attempted.
+      const parsedLedgerTime = event.ledger_closed_at ? Date.parse(event.ledger_closed_at) : NaN;
+      const receivedAt = Number.isNaN(parsedLedgerTime) ? Date.now() : parsedLedgerTime;
+      this.cdnInvalidation.handleContractEvent(eventType, jobId, { receivedAt }).catch((error) => {
+        console.error("[Indexer] CDN invalidation failed:", error.message);
+      });
+    }
   }
 
   async start() {

@@ -22,6 +22,7 @@ Welcome to Stellar MarketPay documentation. This index helps you find what you n
 - **[Deployment Guide](./deployment.md)** - How to deploy Stellar MarketPay
 - **[Soroban Contract Deployment](./contract-deployment.md)** - Build, deploy, and configure the escrow contract
 - **[Environment Variables](./environment-variables.md)** - Single source of truth for runtime config
+- **[CDN Strategy](./CDN_STRATEGY.md)** - Multi-CDN edge caching, event-driven invalidation, cache-key/TTL strategy, stampede protection
 
 ### API Documentation
 
