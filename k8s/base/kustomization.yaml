@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: stellar-marketpay
+resources:
+  - namespace.yaml
+  - runtime-config.yaml
+  - external-secrets.yaml
+  - redis.yaml
+  - services.yaml
+  - analysis-templates.yaml
+  - rollouts.yaml
+  - autoscaling.yaml
+  - availability.yaml
+  - traffic-gate.yaml
+  - ingress.yaml

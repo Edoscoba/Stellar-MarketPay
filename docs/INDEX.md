@@ -20,6 +20,9 @@ Welcome to Stellar MarketPay documentation. This index helps you find what you n
 
 - **[Architecture Overview](./architecture.md)** - System design and components
 - **[Deployment Guide](./deployment.md)** - How to deploy Stellar MarketPay
+- **[Multi-cluster DR Architecture](./dr/architecture.md)** - Active-passive topology, RTO/RPO, and state replication
+- **[DR and Blue-Green Runbook](./dr/runbook.md)** - Failover, deployment rollback, failback, and game-day procedures
+- **[Latest DR Game-Day Report](./dr/game-day-report.md)** - Measured recovery evidence and qualification
 - **[Soroban Contract Deployment](./contract-deployment.md)** - Build, deploy, and configure the escrow contract
 - **[Environment Variables](./environment-variables.md)** - Single source of truth for runtime config
 

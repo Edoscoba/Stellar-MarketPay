@@ -1,0 +1,59 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: marketpay-preview-smoke
+spec:
+  metrics:
+    - name: preview-smoke
+      count: 3
+      interval: 10s
+      failureLimit: 1
+      provider:
+        job:
+          spec:
+            backoffLimit: 0
+            template:
+              spec:
+                restartPolicy: Never
+                automountServiceAccountToken: false
+                containers:
+                  - name: smoke
+                    image: curlimages/curl:8.12.1
+                    command: ["/bin/sh", "-ec"]
+                    args:
+                      - |
+                        curl --fail --silent --show-error --max-time 5 \
+                          http://marketpay-backend-preview:4000/health/standby |
+                          grep -q '"status":"healthy"'
+                        curl --fail --silent --show-error --max-time 5 \
+                          http://marketpay-frontend-preview:3000/ >/dev/null
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: marketpay-active-health
+spec:
+  metrics:
+    - name: active-health
+      count: 6
+      interval: 10s
+      failureLimit: 1
+      provider:
+        job:
+          spec:
+            backoffLimit: 0
+            template:
+              spec:
+                restartPolicy: Never
+                automountServiceAccountToken: false
+                containers:
+                  - name: verify
+                    image: curlimages/curl:8.12.1
+                    command: ["/bin/sh", "-ec"]
+                    args:
+                      - |
+                        curl --fail --silent --show-error --max-time 5 \
+                          http://marketpay-backend:4000/health/standby |
+                          grep -q '"status":"healthy"'
+                        curl --fail --silent --show-error --max-time 5 \
+                          http://marketpay-frontend:3000/ >/dev/null

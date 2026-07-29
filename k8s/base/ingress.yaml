@@ -1,30 +1,32 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: marketpay-ingress
-  namespace: stellar-marketpay
+  name: marketpay
   labels:
     app.kubernetes.io/name: stellar-marketpay
     app.kubernetes.io/component: ingress
   annotations:
-    kubernetes.io/ingress.class: nginx
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: 10m
-    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
 spec:
   ingressClassName: nginx
   tls:
-    - hosts:
-        - stellar-marketpay.example.com
+    - hosts: [marketpay.example.com]
       secretName: marketpay-tls
   rules:
-    - host: stellar-marketpay.example.com
+    - host: marketpay.example.com
       http:
         paths:
+          - path: /__gslb-health
+            pathType: Exact
+            backend:
+              service:
+                name: marketpay-traffic-gate
+                port:
+                  name: http
           - path: /api
             pathType: Prefix
             backend:
@@ -33,14 +35,7 @@ spec:
                 port:
                   name: http
           - path: /health
-            pathType: Exact
-            backend:
-              service:
-                name: marketpay-backend
-                port:
-                  name: http
-          - path: /metrics
-            pathType: Exact
+            pathType: Prefix
             backend:
               service:
                 name: marketpay-backend
