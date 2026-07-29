@@ -127,6 +127,7 @@ controller change:
 
 ```bash
 python3 scripts/dr/gameday.py \
+  --mode live \
   --primary-url https://primary.marketpay.example.com/health/ready \
   --secondary-url https://secondary.marketpay.example.com/health/ready \
   --public-url https://marketpay.example.com/health/ready \

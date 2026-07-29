@@ -1,10 +1,12 @@
+import io
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from gameday import GameDayConfig, GameDayResult, run_game_day, write_reports
+from gameday import GameDayConfig, GameDayResult, parse_args, run_game_day, write_reports
 
 
 class Clock:
@@ -152,6 +154,37 @@ class GameDayTests(unittest.TestCase):
         self.assertIn("injection", result.failure_reason.lower())
         self.assertEqual(commands, ["inject", "restore"])
 
+    def test_reports_both_failures_when_restoration_also_fails(self):
+        # A restore-command failure must never silently erase the reason the
+        # game day already failed for (e.g. injection itself failing) — an
+        # operator reading the report needs the full picture, not whichever
+        # error happened to occur last.
+        commands = []
+
+        def execute(command):
+            commands.append(command)
+            if command == "inject":
+                raise RuntimeError("provider rejected request")
+            if command == "restore":
+                raise RuntimeError("restore endpoint unreachable")
+
+        def health(url):
+            if "primary" in url:
+                return {"status": "healthy", "database": {"writable": True}}
+            return {
+                "database": {
+                    "status": "ok",
+                    "role": "replica",
+                    "replay_lag_seconds": 1,
+                }
+            }
+
+        result = run_game_day(self.config(), health=health, execute=execute)
+
+        self.assertFalse(result.passed)
+        self.assertIn("injection", result.failure_reason.lower())
+        self.assertIn("restoration", result.failure_reason.lower())
+
     def test_writes_machine_and_human_readable_evidence(self):
         result = GameDayResult(
             mode="simulation",
@@ -170,6 +203,39 @@ class GameDayTests(unittest.TestCase):
 
             self.assertIn('"passed": true', json_path.read_text())
             self.assertIn("does not certify production", markdown_path.read_text())
+
+
+class ParseArgsTests(unittest.TestCase):
+    """--mode has no default: the report's own qualification language
+    depends on it, so an operator must consciously state which one they're
+    running rather than silently getting "live"/production-evidence framing
+    on every invocation, dry run or not."""
+
+    base_argv = [
+        "gameday.py",
+        "--primary-url", "https://primary/health/ready",
+        "--secondary-url", "https://secondary/health/ready",
+        "--public-url", "https://public/health/ready",
+        "--secondary-region", "secondary-cluster",
+        "--failure-command", "inject",
+    ]
+
+    def test_mode_is_required(self):
+        with redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                sys.argv = self.base_argv
+                parse_args()
+
+    def test_mode_rejects_unknown_values(self):
+        with redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                sys.argv = self.base_argv + ["--mode", "production"]
+                parse_args()
+
+    def test_mode_accepts_simulation(self):
+        sys.argv = self.base_argv + ["--mode", "simulation"]
+        args = parse_args()
+        self.assertEqual(args.mode, "simulation")
 
 
 if __name__ == "__main__":

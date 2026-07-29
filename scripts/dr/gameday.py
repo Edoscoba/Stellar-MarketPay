@@ -139,7 +139,16 @@ def run_game_day(
             try:
                 execute(config.restore_command)
             except Exception as error:
-                failure_reason = f"Restoration command failed: {error}"
+                restore_error = f"Restoration command failed: {error}"
+                # Never silently discard an earlier failure reason (e.g. the
+                # failure-injection command itself failing) just because
+                # restoration also failed — an operator reading the report
+                # needs both, not whichever happened last.
+                failure_reason = (
+                    f"{failure_reason}; {restore_error}"
+                    if failure_reason
+                    else restore_error
+                )
 
     return GameDayResult(
         mode=mode,
@@ -180,6 +189,20 @@ def write_reports(result: GameDayResult, json_path: Path, markdown_path: Path) -
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--mode",
+        required=True,
+        choices=["live", "simulation"],
+        help=(
+            "'live' certifies production evidence and must only be used against "
+            "real primary/secondary clusters. 'simulation' is for a dry run "
+            "against mock endpoints/commands and is labeled as such in the "
+            "report — it must never be reported as production evidence. There "
+            "is no default: the operator running this must consciously say "
+            "which one they're doing, since the report's own qualification "
+            "language depends on it."
+        ),
+    )
     parser.add_argument("--primary-url", required=True)
     parser.add_argument("--secondary-url", required=True)
     parser.add_argument("--public-url", required=True)
@@ -211,7 +234,8 @@ def main() -> int:
             rpo_target_seconds=args.rpo_target_seconds,
             timeout_seconds=args.timeout_seconds,
             poll_seconds=args.poll_seconds,
-        )
+        ),
+        mode=args.mode,
     )
     write_reports(result, args.report_json, args.report_markdown)
     print(json.dumps(asdict(result), indent=2))
