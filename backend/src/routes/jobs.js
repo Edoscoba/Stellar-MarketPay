@@ -31,6 +31,9 @@ const { getClientReputation } = require("../services/profileService");
 const cache = require("../services/cacheService");
 const jobDraftService = require("../services/jobDraftService");
 const recommendationService = require("../services/recommendationService");
+const { edgeCacheControl, CONTENT_TYPES } = require("../middleware/edgeCacheControl");
+const { coalesce } = require("../middleware/requestCoalescer");
+const { surrogateKeysForJob } = require("../services/cdn/cacheStrategy");
 
 const jobCreationRateLimiter = createRateLimiter(10, 1); // 10 job creations per minute
 const generalJobRateLimiter = createRateLimiter(100, 1); // 100 requests per minute
@@ -188,7 +191,7 @@ async function enrichJobsWithClientReputation(jobs) {
  *                   description: Cursor for next page
  */
 // GET /api/jobs — list jobs
-router.get("/", generalJobRateLimiter, async (req, res, next) => {
+router.get("/", generalJobRateLimiter, edgeCacheControl(CONTENT_TYPES.SEMI_DYNAMIC, { surrogateKeys: ["jobs-list"] }), async (req, res, next) => {
   try {
     const {
       category,
@@ -241,31 +244,37 @@ router.get("/", generalJobRateLimiter, async (req, res, next) => {
       return res.json({ success: true, ...cached, ...(page !== undefined && cursor === undefined && { _deprecation: "The `page` parameter is deprecated. Use cursor-based pagination via `nextCursor`." }) });
     }
 
-    const result = await listJobs({
-      category,
-      status,
-      limit: safeLimit,
-      search,
-      cursor,
-      timezone,
-      viewerAddress,
-      includeExpired,
-      min_budget,
-      max_budget,
-      skills,
-      min_client_rating,
-      duration,
-      posted_since,
-      max_applications,
-    });
+    // Stampede protection: concurrent cache misses for the same query
+    // (e.g. right after an invalidation) share this single origin fetch
+    // instead of each re-querying the DB.
+    const { jobsWithRep, nextCursor } = await coalesce(cacheKey, async () => {
+      const result = await listJobs({
+        category,
+        status,
+        limit: safeLimit,
+        search,
+        cursor,
+        timezone,
+        viewerAddress,
+        includeExpired,
+        min_budget,
+        max_budget,
+        skills,
+        min_client_rating,
+        duration,
+        posted_since,
+        max_applications,
+      });
 
-    const jobsWithRep = await enrichJobsWithClientReputation(result.jobs);
-    await cache.set(cacheKey, { data: jobsWithRep, nextCursor: result.nextCursor }, cache.TTL.JOBS_LIST);
+      const jobsWithRep = await enrichJobsWithClientReputation(result.jobs);
+      await cache.set(cacheKey, { data: jobsWithRep, nextCursor: result.nextCursor }, cache.TTL.JOBS_LIST);
+      return { jobsWithRep, nextCursor: result.nextCursor };
+    });
     res.set("X-Cache", "MISS");
     res.json({
       success: true,
       data: jobsWithRep,
-      nextCursor: result.nextCursor,
+      nextCursor,
       ...(page !== undefined && cursor === undefined && {
         _deprecation: "The `page` parameter is deprecated. Use cursor-based pagination via `nextCursor`.",
       }),
@@ -305,15 +314,34 @@ router.get(
 );
 
 // GET /api/jobs/:id — get single job
-router.get("/:id", generalJobRateLimiter, async (req, res, next) => {
-  try {
-    const job = await getJob(req.params.id);
-    const [jobWithRep] = await enrichJobsWithClientReputation([job]);
-    res.json({ success: true, data: jobWithRep });
-  } catch (e) {
-    next(e);
+router.get(
+  "/:id",
+  generalJobRateLimiter,
+  edgeCacheControl(CONTENT_TYPES.SEMI_DYNAMIC, { surrogateKeys: (req) => surrogateKeysForJob(req.params.id) }),
+  async (req, res, next) => {
+    try {
+      const cacheKey = cache.jobDetailKey(req.params.id);
+      const cached = await cache.get(cacheKey);
+      if (cached) {
+        res.set("X-Cache", "HIT");
+        return res.json({ success: true, data: cached });
+      }
+
+      // Stampede protection: a popular job page hit by many viewers at once
+      // right after a purge shares one origin fetch instead of N.
+      const jobWithRep = await coalesce(cacheKey, async () => {
+        const job = await getJob(req.params.id);
+        const [enriched] = await enrichJobsWithClientReputation([job]);
+        await cache.set(cacheKey, enriched, cache.TTL.JOB_DETAIL);
+        return enriched;
+      });
+      res.set("X-Cache", "MISS");
+      res.json({ success: true, data: jobWithRep });
+    } catch (e) {
+      next(e);
+    }
   }
-});
+);
 
 /**
  * @swagger

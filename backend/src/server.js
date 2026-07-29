@@ -46,11 +46,15 @@ const eventsRoutes    = require("./routes/events");
 const invitationRoutes = require("./routes/invitations");
 const statsRoutes      = require("./routes/stats");
 const gasEstimatorRoutes = require("./routes/gasEstimator");
+const cdnRoutes        = require("./routes/cdn");
 
 const pool            = require("./db/pool");
 const { migrate } = require("./db/migrate");
 const IndexerService  = require("./services/indexerService");
 const PriceAlertService = require("./services/priceAlertService");
+const CdnService = require("./services/cdn/cdnService");
+const CdnInvalidationService = require("./services/cdn/invalidationService");
+const { createProvidersFromEnv } = require("./services/cdn/providers");
 
 const serviceLogger = createServiceLogger('server');
 const app  = express();
@@ -156,11 +160,22 @@ setInterval(() => {
   });
 }, 60 * 60 * 1000).unref();
 
+const cdnService = new CdnService({
+  providers: createProvidersFromEnv(process.env),
+  metricsRegistry,
+});
+const cdnInvalidation = new CdnInvalidationService({
+  cdnService,
+  metricsRegistry,
+  publicBaseUrl: process.env.PUBLIC_BASE_URL,
+});
+
 const indexerService = new IndexerService({
   platformWallet: process.env.PLATFORM_WALLET_ADDRESS,
   horizonUrl: process.env.HORIZON_URL,
   contractId: process.env.CONTRACT_ID || process.env.ESCROW_CONTRACT_ID,
   broadcast: broadcastRealtime,
+  cdnInvalidation,
 });
 const smtpEnabled = Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 const smtpTransport = smtpEnabled
@@ -189,6 +204,8 @@ const priceAlertService = new PriceAlertService({
 
 app.locals.indexerService = indexerService;
 app.locals.broadcastRealtime = broadcastRealtime;
+app.locals.cdnService = cdnService;
+app.locals.cdnInvalidation = cdnInvalidation;
 
 // Middleware
 app.use(helmet({
@@ -303,6 +320,7 @@ app.use("/api/events",        eventsRoutes);
 app.use("/api/invitations",   invitationRoutes);
 app.use("/api/stats",         statsRoutes);
 app.use("/api/gas-estimate", gasEstimatorRoutes);
+app.use("/api/cdn",          cdnRoutes);
 
 app.use((err, req, res, next) => {
   void next;

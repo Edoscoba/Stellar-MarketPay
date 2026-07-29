@@ -62,6 +62,16 @@ function profileKey(publicKey) {
 }
 
 /**
+ * Build the cache key for a single job detail lookup.
+ *
+ * @param {string} jobId
+ * @returns {string}
+ */
+function jobDetailKey(jobId) {
+  return `job:detail:${jobId}`;
+}
+
+/**
  * Get a cached value. Returns null on miss or error.
  *
  * @param {string} key
@@ -131,10 +141,11 @@ async function del(key) {
   }
 }
 
-module.exports = { get, set, del, delPattern, jobListKey, profileKey };
+module.exports = { get, set, del, delPattern, jobListKey, profileKey, jobDetailKey };
 
 // TTL constants exported so callers don't hard-code numbers.
 module.exports.TTL = {
   JOBS_LIST: 30,   // 30 s — jobs change frequently
   PROFILE: 300,    // 5 min
+  JOB_DETAIL: 30,  // 30 s — same volatility as the list; event-driven purge covers the rest
 };
