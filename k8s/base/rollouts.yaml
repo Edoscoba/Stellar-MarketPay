@@ -1,0 +1,186 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: marketpay-backend
+  labels:
+    app.kubernetes.io/name: stellar-marketpay
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  progressDeadlineSeconds: 600
+  progressDeadlineAbort: true
+  rollbackWindow:
+    revisions: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stellar-marketpay
+      app.kubernetes.io/component: backend
+  strategy:
+    blueGreen:
+      activeService: marketpay-backend
+      previewService: marketpay-backend-preview
+      autoPromotionEnabled: true
+      previewReplicaCount: 2
+      scaleDownDelaySeconds: 300
+      scaleDownDelayRevisionLimit: 2
+      prePromotionAnalysis:
+        templates:
+          - templateName: marketpay-preview-smoke
+      postPromotionAnalysis:
+        templates:
+          - templateName: marketpay-active-health
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: stellar-marketpay
+        app.kubernetes.io/component: backend
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: backend
+          image: ghcr.io/kryputh/stellar-marketpay-backend:replace-with-immutable-tag
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 4000
+          envFrom:
+            - configMapRef:
+                name: marketpay-runtime-config
+            - secretRef:
+                name: marketpay-backend-secrets
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health/standby
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: marketpay-frontend
+  labels:
+    app.kubernetes.io/name: stellar-marketpay
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  progressDeadlineSeconds: 600
+  progressDeadlineAbort: true
+  rollbackWindow:
+    revisions: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stellar-marketpay
+      app.kubernetes.io/component: frontend
+  strategy:
+    blueGreen:
+      activeService: marketpay-frontend
+      previewService: marketpay-frontend-preview
+      autoPromotionEnabled: true
+      previewReplicaCount: 2
+      scaleDownDelaySeconds: 300
+      scaleDownDelayRevisionLimit: 2
+      prePromotionAnalysis:
+        templates:
+          - templateName: marketpay-preview-smoke
+      postPromotionAnalysis:
+        templates:
+          - templateName: marketpay-active-health
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: stellar-marketpay
+        app.kubernetes.io/component: frontend
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+      containers:
+        - name: frontend
+          image: ghcr.io/kryputh/stellar-marketpay-frontend:replace-with-immutable-tag
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: marketpay-runtime-config
+            - secretRef:
+                name: marketpay-frontend-secrets
+          env:
+            - name: PORT
+              value: "3000"
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

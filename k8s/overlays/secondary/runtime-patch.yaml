@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: marketpay-runtime-config
+data:
+  CLUSTER_ROLE: passive
+  REGION: secondary-cluster

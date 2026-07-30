@@ -1,0 +1,80 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: marketpay-backend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stellar-marketpay
+      app.kubernetes.io/component: backend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: marketpay-frontend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: stellar-marketpay
+      app.kubernetes.io/component: frontend
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+---
+# Split deliberately in two, rather than one rule allowing all four ports
+# from every namespace: the ingress controller has no legitimate reason to
+# reach Redis (6379) directly, and letting every namespace in the cluster
+# reach it was broader than this data warrants.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-intra-namespace-traffic
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: stellar-marketpay
+  policyTypes: ["Ingress"]
+  ingress:
+    # Same-namespace only (no namespaceSelector): covers traffic-gate ->
+    # backend:4000, backend -> redis:6379, and the Argo Rollouts
+    # AnalysisTemplate smoke-test Jobs -> *-preview Services.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: stellar-marketpay
+      ports:
+        - { protocol: TCP, port: 3000 }
+        - { protocol: TCP, port: 4000 }
+        - { protocol: TCP, port: 6379 }
+        - { protocol: TCP, port: 8080 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-controller-traffic
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: stellar-marketpay
+  policyTypes: ["Ingress"]
+  ingress:
+    # Only the ports actually fronted by k8s/base/ingress.yaml. Assumes the
+    # common convention of an ingress-nginx controller running in a
+    # namespace literally named "ingress-nginx" (matched here via the
+    # automatic kubernetes.io/metadata.name label every namespace carries
+    # since Kubernetes 1.21) — adjust if your cluster names it differently.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - { protocol: TCP, port: 3000 } # frontend
+        - { protocol: TCP, port: 4000 } # backend (/api, /health)
+        - { protocol: TCP, port: 8080 } # traffic-gate (/__gslb-health)

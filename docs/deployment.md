@@ -6,6 +6,13 @@ This repository now uses three GitHub Actions workflows for CI/CD:
 - `.github/workflows/deploy-production.yml`: manual production promotion through `workflow_dispatch` and GitHub `production` environment approval.
 - `.github/workflows/rollback.yml`: manual rollback to a previous image tag.
 
+### Kubernetes production path
+
+The Kubernetes production path uses the multi-cluster Kustomize overlays and
+Argo Rollouts blue-green strategy under [`k8s/`](../k8s/README.md). See the
+[DR architecture](./dr/architecture.md) and [operator runbook](./dr/runbook.md)
+before provisioning or changing production clusters.
+
 ## Staging Flow
 1. Build frontend Docker image.
 2. Push image to GHCR (`ghcr.io/<owner>/<repo>:<sha>`).

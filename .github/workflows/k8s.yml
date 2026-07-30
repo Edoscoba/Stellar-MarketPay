@@ -1,0 +1,46 @@
+name: Kubernetes DR and Blue-Green
+
+on:
+  pull_request:
+    paths:
+      - "k8s/**"
+      - "scripts/k8s/**"
+      - "scripts/dr/**"
+      - "docs/dr/**"
+      - "backend/src/routes/health.js"
+      - "backend/src/routes/health.test.js"
+      - ".github/workflows/k8s.yml"
+      - ".github/workflows/deploy-k8s.yml"
+  push:
+    branches: [main]
+    paths:
+      - "k8s/**"
+      - "scripts/k8s/**"
+      - "scripts/dr/**"
+      - "docs/dr/**"
+      - "backend/src/routes/health.js"
+      - "backend/src/routes/health.test.js"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.36.3
+
+      - name: Render and validate both clusters
+        run: |
+          set -euo pipefail
+          for cluster in primary secondary; do
+            kubectl kustomize "k8s/overlays/$cluster" |
+              docker run --rm -i ghcr.io/yannh/kubeconform:v0.8.0 \
+                -strict -summary -ignore-missing-schemas
+          done
+
+      - name: Check automation syntax
+        run: bash -n scripts/k8s/deploy-blue-green.sh
+
+      - name: Run DR coordinator tests
+        run: python3 -m unittest discover -s scripts/dr/tests -v

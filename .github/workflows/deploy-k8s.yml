@@ -1,0 +1,53 @@
+name: Deploy Kubernetes Blue-Green
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Immutable backend/frontend image tag
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: marketpay-production-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: v1.36.3
+
+      - name: Install verified Argo Rollouts plugin
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl -fsSLO https://github.com/argoproj/argo-rollouts/releases/download/v1.9.1/kubectl-argo-rollouts-linux-amd64
+          curl -fsSLO https://github.com/argoproj/argo-rollouts/releases/download/v1.9.1/argo-rollouts-checksums.txt
+          grep 'kubectl-argo-rollouts-linux-amd64$' argo-rollouts-checksums.txt | sha256sum --check -
+          sudo install -m 0755 kubectl-argo-rollouts-linux-amd64 /usr/local/bin/kubectl-argo-rollouts
+
+      - name: Configure cluster credentials
+        env:
+          PRIMARY_KUBECONFIG_B64: ${{ secrets.PRIMARY_KUBECONFIG_B64 }}
+          SECONDARY_KUBECONFIG_B64: ${{ secrets.SECONDARY_KUBECONFIG_B64 }}
+        run: |
+          install -d -m 700 "$RUNNER_TEMP/kube"
+          printf '%s' "$PRIMARY_KUBECONFIG_B64" | base64 --decode > "$RUNNER_TEMP/kube/primary"
+          printf '%s' "$SECONDARY_KUBECONFIG_B64" | base64 --decode > "$RUNNER_TEMP/kube/secondary"
+          chmod 600 "$RUNNER_TEMP/kube/primary" "$RUNNER_TEMP/kube/secondary"
+
+      # Update the passive cluster first so a failed release never degrades both
+      # regions at the same time.
+      - name: Deploy secondary
+        env:
+          KUBECONFIG: ${{ runner.temp }}/kube/secondary
+        run: scripts/k8s/deploy-blue-green.sh secondary "${{ inputs.image_tag }}"
+
+      - name: Deploy primary
+        env:
+          KUBECONFIG: ${{ runner.temp }}/kube/primary
+        run: scripts/k8s/deploy-blue-green.sh primary "${{ inputs.image_tag }}"

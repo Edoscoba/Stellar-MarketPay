@@ -4,7 +4,7 @@
  * Enhanced health check endpoint for readiness probes (Kubernetes / Docker).
  *
  * GET /health
- *   - Runs SELECT 1 against the database (timeout: 2 s)
+ *   - Verifies database connectivity and whether the endpoint is writable
  *   - Pings Stellar Horizon /ledgers?limit=1 (timeout: 2 s)
  *   - Returns 200 when all dependencies are healthy
  *   - Returns 503 when any critical dependency is down
@@ -40,19 +40,42 @@ const CHECK_TIMEOUT_MS = 2000;
  */
 async function checkDatabase() {
   const start = Date.now();
+  let timeout;
   try {
-    await Promise.race([
-      pool.query("SELECT 1"),
-      new Promise((_, reject) =>
-        setTimeout(
+    const result = await Promise.race([
+      pool.query(`
+        SELECT
+          pg_is_in_recovery() AS in_recovery,
+          CASE
+            WHEN pg_is_in_recovery() THEN
+              EXTRACT(EPOCH FROM (clock_timestamp() - pg_last_xact_replay_timestamp()))
+            ELSE 0
+          END AS replay_lag_seconds
+      `),
+      new Promise((_, reject) => {
+        timeout = setTimeout(
           () => reject(new Error("Database check timed out")),
           CHECK_TIMEOUT_MS,
-        ),
-      ),
+        );
+      }),
     ]);
-    return { status: "ok", latency_ms: Date.now() - start };
+    const row = result.rows?.[0] || {};
+    const inRecovery = row.in_recovery === true;
+    const replayLag =
+      row.replay_lag_seconds === null || row.replay_lag_seconds === undefined
+        ? Number.NaN
+        : Number(row.replay_lag_seconds);
+    return {
+      status: "ok",
+      latency_ms: Date.now() - start,
+      role: inRecovery ? "replica" : "primary",
+      writable: !inRecovery,
+      replay_lag_seconds: Number.isFinite(replayLag) ? replayLag : null,
+    };
   } catch (err) {
     return { status: "error", message: err.message };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -134,16 +157,30 @@ async function checkStellar() {
  *       503:
  *         description: One or more dependencies are down
  */
-router.get("/", healthRateLimiter, async (req, res) => {
+function liveHandler(req, res) {
+  res.set("Cache-Control", "no-store").status(200).json({
+    status: "alive",
+    region: process.env.REGION || "unknown",
+    cluster_role: process.env.CLUSTER_ROLE || "unknown",
+    uptime_seconds: Math.floor((Date.now() - SERVER_START) / 1000),
+    version: VERSION,
+  });
+}
+
+async function dependencyHealthHandler(req, res, requireWritable) {
   const [database, stellar] = await Promise.all([
     checkDatabase(),
     checkStellar(),
   ]);
 
-  const healthy = database.status === "ok" && stellar.status === "ok";
+  const databaseReady =
+    database.status === "ok" && (!requireWritable || database.writable === true);
+  const healthy = databaseReady && stellar.status === "ok";
 
   const body = {
     status: healthy ? "healthy" : "degraded",
+    region: process.env.REGION || "unknown",
+    cluster_role: process.env.CLUSTER_ROLE || "unknown",
     database,
     stellar,
     uptime_seconds: Math.floor((Date.now() - SERVER_START) / 1000),
@@ -154,7 +191,30 @@ router.get("/", healthRateLimiter, async (req, res) => {
       : null,
   };
 
-  res.status(healthy ? 200 : 503).json(body);
-});
+  res
+    .set("Cache-Control", "no-store")
+    .status(healthy ? 200 : 503)
+    .json(body);
+}
+
+router.get("/live", liveHandler);
+router.get("/standby", healthRateLimiter, (req, res) =>
+  dependencyHealthHandler(req, res, false)
+);
+router.get("/ready", healthRateLimiter, (req, res) =>
+  dependencyHealthHandler(
+    req,
+    res,
+    process.env.REQUIRE_WRITABLE_DB === "true",
+  )
+);
+// Preserve the existing endpoint for clients and older manifests.
+router.get("/", healthRateLimiter, (req, res) =>
+  dependencyHealthHandler(
+    req,
+    res,
+    process.env.REQUIRE_WRITABLE_DB === "true",
+  )
+);
 
 module.exports = router;

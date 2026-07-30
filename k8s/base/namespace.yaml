@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: stellar-marketpay
+  labels:
+    app.kubernetes.io/name: stellar-marketpay
+    secrets.marketpay.io/replicate: "true"

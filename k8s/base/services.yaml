@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: marketpay-backend
+  labels:
+    app.kubernetes.io/name: stellar-marketpay
+    app.kubernetes.io/component: backend
+spec:
+  selector:
+    app.kubernetes.io/name: stellar-marketpay
+    app.kubernetes.io/component: backend
+  ports:
+    - name: http
+      port: 4000
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: marketpay-backend-preview
+  labels:
+    app.kubernetes.io/name: stellar-marketpay
+    app.kubernetes.io/component: backend
+spec:
+  selector:
+    app.kubernetes.io/name: stellar-marketpay
+    app.kubernetes.io/component: backend
+  ports:
+    - name: http
+      port: 4000
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: marketpay-frontend
+  labels:
+    app.kubernetes.io/name: stellar-marketpay
+    app.kubernetes.io/component: frontend
+spec:
+  selector:
+    app.kubernetes.io/name: stellar-marketpay
+    app.kubernetes.io/component: frontend
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: marketpay-frontend-preview
+  labels:
+    app.kubernetes.io/name: stellar-marketpay
+    app.kubernetes.io/component: frontend
+spec:
+  selector:
+    app.kubernetes.io/name: stellar-marketpay
+    app.kubernetes.io/component: frontend
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
