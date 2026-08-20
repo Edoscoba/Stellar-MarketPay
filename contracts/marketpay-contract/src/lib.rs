@@ -117,6 +117,14 @@ pub struct Escrow {
     pub referrer: Option<Address>,
     /// Optional expected SHA-256 deliverable hash agreed by both parties
     pub deliverable_hash: Option<Bytes>,
+    /// Optional arbitrator address. When set, this escrow requires 2-of-3
+    /// multisig approval (client, freelancer, arbitrator) to release or
+    /// refund, instead of the client's unilateral signature.
+    pub arbitrator: Option<Address>,
+    /// Number of distinct approvals recorded for the pending release action.
+    pub release_approvals: u32,
+    /// Number of distinct approvals recorded for the pending refund action.
+    pub refund_approvals: u32,
 }
 
 /// Budget commitment for sealed-bid system (Issue #108)
@@ -241,6 +249,10 @@ pub enum DataKey {
     FreelancerRating(String),
     FreelancerRatingStats(Address),
     Arbitrator(Address),
+    /// Multisig: (job_id, signer) → bool, whether `signer` has approved release
+    MultisigReleaseVote(String, Address),
+    /// Multisig: (job_id, signer) → bool, whether `signer` has approved refund
+    MultisigRefundVote(String, Address),
     ArbitratorPool,
     ArbitrationCase(u32),
     ArbitrationCaseCount,
@@ -394,6 +406,7 @@ impl MarketPayContract {
             params.milestones,
             params.timeout_ledgers,
             params.referrer,
+            params.arbitrator,
             Some(deliverable_hash.into()),
         )
     }
@@ -409,6 +422,7 @@ impl MarketPayContract {
         milestones: Option<soroban_sdk::Vec<i128>>,
         timeout_ledgers: Option<u32>,
         referrer: Option<Address>,
+        arbitrator: Option<Address>,
         deliverable_hash: Option<Bytes>,
     ) {
         client.require_auth();
@@ -2722,7 +2736,7 @@ mod regression_tests {
         token_admin.mint(&client, &1000);
 
         let job_id = String::from_str(&env, "job_referrer");
-        contract_client.create_escrow(&job_id, &client.clone(), &CreateEscrowParams { freelancer: freelancer.clone(), token: token_id.clone(), amount: 1000, milestones: None, timeout_ledgers: None, referrer: Some(referrer.clone()) });
+        contract_client.create_escrow(&job_id, &client.clone(), &CreateEscrowParams { freelancer: freelancer.clone(), token: token_id.clone(), amount: 1000, milestones: None, timeout_ledgers: None, referrer: Some(referrer.clone()), arbitrator: None });
         contract_client.start_work(&job_id, &client.clone());
 
         contract_client.release_escrow(&job_id, &client.clone());
@@ -3274,6 +3288,7 @@ mod milestone_oracle_tests {
                 milestones: Some(milestones),
                 timeout_ledgers: None,
                 referrer: None,
+                arbitrator: None,
             },
         );
         contract.start_work(&job_id, &client);
@@ -3316,6 +3331,7 @@ mod milestone_oracle_tests {
                 milestones: Some(milestones),
                 timeout_ledgers: None,
                 referrer: None,
+                arbitrator: None,
             },
         );
         contract.start_work(&job_id, &client);
@@ -3348,6 +3364,7 @@ mod milestone_oracle_tests {
                 milestones: Some(milestones),
                 timeout_ledgers: None,
                 referrer: None,
+                arbitrator: None,
             },
         );
         contract.start_work(&job_id, &client);
@@ -3358,6 +3375,295 @@ mod milestone_oracle_tests {
             &0u32,
             &impostor,
             &proof_for_query(&env, &query),
+        );
+    }
+}
+
+
+#[cfg(test)]
+mod multisig_tests {
+    use super::*;
+    use soroban_sdk::{testutils::Address as _, Address, Env, String};
+
+    /// Sets up a contract + funded client + 2-of-3 multisig escrow
+    /// (client, freelancer, arbitrator), already moved to InProgress.
+    fn setup_multisig_escrow(
+        env: &Env,
+    ) -> (MarketPayContractClient, Address, Address, Address, Address, String) {
+        env.mock_all_auths();
+        let id = env.register(MarketPayContract, ());
+        let contract = MarketPayContractClient::new(env, &id);
+        let admin = Address::generate(env);
+        contract.initialize(&admin);
+
+        let client = Address::generate(env);
+        let freelancer = Address::generate(env);
+        let arbitrator = Address::generate(env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(env, &token_id);
+        token_admin.mint(&client, &1_000);
+
+        let job_id = String::from_str(env, "multisig-job-1");
+        contract.create_escrow(
+            &job_id,
+            &client,
+            &CreateEscrowParams {
+                freelancer: freelancer.clone(),
+                token: token_id.clone(),
+                amount: 1_000,
+                milestones: None,
+                timeout_ledgers: None,
+                referrer: None,
+                arbitrator: Some(arbitrator.clone()),
+            },
+        );
+        contract.start_work(&job_id, &client);
+
+        (contract, client, freelancer, arbitrator, token_id, job_id)
+    }
+
+    #[test]
+    fn test_escrow_initializes_with_three_signers() {
+        let env = Env::default();
+        let (contract, client, freelancer, arbitrator, _token_id, job_id) =
+            setup_multisig_escrow(&env);
+
+        let escrow = contract.get_escrow(&job_id);
+        assert_eq!(escrow.client, client);
+        assert_eq!(escrow.freelancer, freelancer);
+        assert_eq!(escrow.arbitrator, Some(arbitrator));
+        assert_eq!(escrow.release_approvals, 0);
+    }
+
+    #[test]
+    fn test_single_approval_does_not_release_funds() {
+        let env = Env::default();
+        let (contract, client, freelancer, _arbitrator, token_id, job_id) =
+            setup_multisig_escrow(&env);
+
+        contract.approve_release(&job_id, &client);
+
+        let escrow = contract.get_escrow(&job_id);
+        assert_eq!(escrow.status, EscrowStatus::InProgress);
+        assert_eq!(escrow.release_approvals, 1);
+
+        let token_client = token::Client::new(&env, &token_id);
+        assert_eq!(token_client.balance(&freelancer), 0);
+    }
+
+    #[test]
+    fn test_two_approvals_release_funds() {
+        let env = Env::default();
+        let (contract, client, freelancer, arbitrator, token_id, job_id) =
+            setup_multisig_escrow(&env);
+
+        contract.approve_release(&job_id, &client);
+        contract.approve_release(&job_id, &arbitrator);
+
+        let escrow = contract.get_escrow(&job_id);
+        assert_eq!(escrow.status, EscrowStatus::Released);
+        assert_eq!(escrow.release_approvals, 2);
+
+        // ISSUE-17 takes a 1% platform fee out of the released amount, so the
+        // freelancer nets 990 of the 1_000 locked in escrow.
+        let token_client = token::Client::new(&env, &token_id);
+        assert_eq!(token_client.balance(&freelancer), 990);
+    }
+
+    #[test]
+    fn test_freelancer_and_arbitrator_can_release_without_client() {
+        let env = Env::default();
+        let (contract, _client, freelancer, arbitrator, token_id, job_id) =
+            setup_multisig_escrow(&env);
+
+        contract.approve_release(&job_id, &freelancer);
+        contract.approve_release(&job_id, &arbitrator);
+
+        let escrow = contract.get_escrow(&job_id);
+        assert_eq!(escrow.status, EscrowStatus::Released);
+
+        // Net of the 1% ISSUE-17 platform fee, as above.
+        let token_client = token::Client::new(&env, &token_id);
+        assert_eq!(token_client.balance(&freelancer), 990);
+    }
+
+    #[test]
+    #[should_panic(expected = "Signer has already approved release for this job")]
+    fn test_duplicate_approval_rejected() {
+        let env = Env::default();
+        let (contract, client, _freelancer, _arbitrator, _token_id, job_id) =
+            setup_multisig_escrow(&env);
+
+        contract.approve_release(&job_id, &client);
+        contract.approve_release(&job_id, &client);
+    }
+
+    #[test]
+    #[should_panic(expected = "Signer must be the client, freelancer, or arbitrator")]
+    fn test_non_signer_approval_rejected() {
+        let env = Env::default();
+        let (contract, _client, _freelancer, _arbitrator, _token_id, job_id) =
+            setup_multisig_escrow(&env);
+
+        let outsider = Address::generate(&env);
+        contract.approve_release(&job_id, &outsider);
+    }
+
+    #[test]
+    #[should_panic(expected = "Escrow requires multisig approval")]
+    fn test_unilateral_release_rejected_for_multisig_escrow() {
+        let env = Env::default();
+        let (contract, client, _freelancer, _arbitrator, _token_id, job_id) =
+            setup_multisig_escrow(&env);
+
+        contract.release_escrow(&job_id, &client);
+    }
+
+    #[test]
+    #[should_panic(expected = "Escrow does not use multisig approval")]
+    fn test_approve_release_rejected_for_non_multisig_escrow() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register(MarketPayContract, ());
+        let contract = MarketPayContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        contract.initialize(&admin);
+
+        let client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+        token_admin.mint(&client, &500);
+
+        let job_id = String::from_str(&env, "non-multisig-job");
+        contract.create_escrow(
+            &job_id,
+            &client,
+            &CreateEscrowParams {
+                freelancer,
+                token: token_id,
+                amount: 500,
+                milestones: None,
+                timeout_ledgers: None,
+                referrer: None,
+                arbitrator: None,
+            },
+        );
+
+        contract.approve_release(&job_id, &client);
+    }
+
+    #[test]
+    fn test_two_approvals_refund_escrow() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register(MarketPayContract, ());
+        let contract = MarketPayContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        contract.initialize(&admin);
+
+        let client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let arbitrator = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+        token_admin.mint(&client, &1_000);
+
+        let job_id = String::from_str(&env, "multisig-refund-job");
+        contract.create_escrow(
+            &job_id,
+            &client,
+            &CreateEscrowParams {
+                freelancer: freelancer.clone(),
+                token: token_id.clone(),
+                amount: 1_000,
+                milestones: None,
+                timeout_ledgers: None,
+                referrer: None,
+                arbitrator: Some(arbitrator.clone()),
+            },
+        );
+
+        // Refund is only allowed before work starts (status Locked)
+        contract.approve_refund(&job_id, &freelancer);
+        contract.approve_refund(&job_id, &arbitrator);
+
+        let escrow = contract.get_escrow(&job_id);
+        assert_eq!(escrow.status, EscrowStatus::Refunded);
+
+        let token_client = token::Client::new(&env, &token_id);
+        assert_eq!(token_client.balance(&client), 1_000);
+    }
+
+    #[test]
+    #[should_panic(expected = "Escrow requires multisig approval")]
+    fn test_unilateral_refund_rejected_for_multisig_escrow() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register(MarketPayContract, ());
+        let contract = MarketPayContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        contract.initialize(&admin);
+
+        let client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let arbitrator = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+        token_admin.mint(&client, &500);
+
+        let job_id = String::from_str(&env, "multisig-refund-rejected-job");
+        contract.create_escrow(
+            &job_id,
+            &client,
+            &CreateEscrowParams {
+                freelancer,
+                token: token_id,
+                amount: 500,
+                milestones: None,
+                timeout_ledgers: None,
+                referrer: None,
+                arbitrator: Some(arbitrator),
+            },
+        );
+
+        contract.refund_escrow(&job_id, &client);
+    }
+
+    #[test]
+    #[should_panic(expected = "Arbitrator must be distinct from the client and freelancer")]
+    fn test_arbitrator_cannot_equal_client_or_freelancer() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let id = env.register(MarketPayContract, ());
+        let contract = MarketPayContractClient::new(&env, &id);
+        let admin = Address::generate(&env);
+        contract.initialize(&admin);
+
+        let client = Address::generate(&env);
+        let freelancer = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
+        let token_id = token_contract.address();
+        let token_admin = token::StellarAssetClient::new(&env, &token_id);
+        token_admin.mint(&client, &500);
+
+        let job_id = String::from_str(&env, "bad-arbitrator-job");
+        contract.create_escrow(
+            &job_id,
+            &client,
+            &CreateEscrowParams {
+                freelancer: freelancer.clone(),
+                token: token_id,
+                amount: 500,
+                milestones: None,
+                timeout_ledgers: None,
+                referrer: None,
+                arbitrator: Some(client.clone()),
+            },
         );
     }
 }

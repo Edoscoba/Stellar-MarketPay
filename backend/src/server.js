@@ -665,6 +665,12 @@ function startWeeklyDigestScheduler() {
   }, delay).unref();
 }
 
-bootstrap();
+// Only boot the full service when this file is the process entry point
+// (`node src/server.js`, as used by npm start, nodemon and the Dockerfile).
+// Tests require this module for the Express app alone, and must not bind the
+// port or start the indexer, schedulers and interval timers.
+if (require.main === module) {
+  bootstrap();
+}
 
 module.exports = app;
