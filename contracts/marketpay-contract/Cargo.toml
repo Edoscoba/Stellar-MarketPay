@@ -19,7 +19,11 @@ zeroize_derive = "=1.4.2"
 time-core = "=0.1.8"
 indexmap = "=2.1.0"
 serde_with = "=3.6.1"
-ethnum = "=1.5.0"
+# Must stay >=1.5.3: 1.5.0 transmutes () into core::num::TryFromIntError,
+# which rustc 1.97+ rejects (E0512) now that the type is no longer
+# zero-sized. soroban-env-common asks for ^1.5.0, so only this pin was
+# holding the build on the broken version.
+ethnum = "1.5.3"
 
 [dev-dependencies]
 soroban-sdk = { version = "=22.0.0", default-features = false, features = ["testutils"] }
