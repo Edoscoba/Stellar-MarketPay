@@ -125,6 +125,12 @@ describe("profileService", () => {
 
   describe("getProfile", () => {
     it("returns portfolioItems from the profile row", async () => {
+      // The Rising Talent tier requires an account younger than 90 days, so
+      // anchor the fixture to "now" instead of a fixed date that ages out of
+      // the window and turns this into a Newcomer months after it was written.
+      const recentCreatedAt = new Date(
+        Date.now() - 30 * 24 * 60 * 60 * 1000,
+      ).toISOString();
       const profileRow = {
         public_key: publicKey,
         display_name: "Jane Doe",
@@ -143,8 +149,8 @@ describe("profileService", () => {
         total_earned_xlm: "150.0000000",
         avg_rating: "4.80",
         rating_count: 2,
-        created_at: "2026-04-23T00:00:00.000Z",
-        updated_at: "2026-04-23T00:00:00.000Z",
+        created_at: recentCreatedAt,
+        updated_at: recentCreatedAt,
       };
       pool.query
         .mockResolvedValueOnce({ rows: [profileRow] })

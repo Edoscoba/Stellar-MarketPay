@@ -30,4 +30,8 @@ backend/coverage/
 frontend/coverage/
 
 # Cargo
-Cargo.lock
+# Cargo.lock IS committed. The contract is a deployable artifact, so its build
+# must be reproducible, and soroban-env-host declares `ed25519-dalek = ">=2.0.0"`
+# — an unbounded range. Without a committed lock, CI re-resolves to the newest
+# major (3.x), which does not compile against env-host, and the Rust job breaks
+# with no change to this repo.

@@ -98,6 +98,40 @@ const sampleJob: Job = {
   updatedAt: "2026-01-12T10:00:00.000Z",
 };
 
+// JobCard renders `timeAgo(job.createdAt)`, which is relative to the wall
+// clock — against a fixed fixture date the rendered text drifts ("6 months
+// ago" becomes "7 months ago") and silently breaks the snapshot months after
+// it was recorded. Freeze the clock so the output is deterministic. Only the
+// Date API is faked; timers, promises and microtasks stay real so the async
+// components in this file (Navbar) behave normally.
+const FIXED_NOW = new Date("2026-07-15T10:00:00.000Z");
+
+beforeAll(() => {
+  jest.useFakeTimers({
+    now: FIXED_NOW,
+    doNotFake: [
+      "cancelAnimationFrame",
+      "cancelIdleCallback",
+      "clearImmediate",
+      "clearInterval",
+      "clearTimeout",
+      "hrtime",
+      "nextTick",
+      "performance",
+      "queueMicrotask",
+      "requestAnimationFrame",
+      "requestIdleCallback",
+      "setImmediate",
+      "setInterval",
+      "setTimeout",
+    ],
+  });
+});
+
+afterAll(() => {
+  jest.useRealTimers();
+});
+
 describe("component snapshots", () => {
   it("JobCard without bookmark", () => {
     const { container } = render(<JobCard job={sampleJob} />);

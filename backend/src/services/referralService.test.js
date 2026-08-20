@@ -150,6 +150,9 @@ describe('ReferralService - Multi-Level Referral Tree', () => {
         .mockResolvedValueOnce({
           rows: [{ tree_total_xlm: '1.2', tree_payout_count: '3' }],
         })
+        .mockResolvedValueOnce({
+          rows: [{ fee_total_xlm: '0.8', fee_payout_count: '1' }],
+        }) // platform fee earnings
         .mockResolvedValueOnce({ rows: [] }) // referees
         .mockResolvedValueOnce({ rows: [] }); // payouts
 
@@ -160,6 +163,8 @@ describe('ReferralService - Multi-Level Referral Tree', () => {
       expect(stats.pendingReferrals).toBe(3);
       expect(stats.totalEarnedXlm).toBe('5.5000000');
       expect(stats.treeEarnedXlm).toBe('1.2000000');
+      expect(stats.platformFeeEarnedXlm).toBe('0.8000000');
+      expect(stats.platformFeePayoutCount).toBe(1);
     });
 
     it('should handle user with no referrals', async () => {
@@ -174,6 +179,9 @@ describe('ReferralService - Multi-Level Referral Tree', () => {
         })
         .mockResolvedValueOnce({
           rows: [{ tree_total_xlm: '0', tree_payout_count: '0' }],
+        })
+        .mockResolvedValueOnce({
+          rows: [{ fee_total_xlm: '0', fee_payout_count: '0' }],
         })
         .mockResolvedValueOnce({ rows: [] })
         .mockResolvedValueOnce({ rows: [] });
