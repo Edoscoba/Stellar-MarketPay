@@ -97,6 +97,39 @@ Look for `good first issue` labels to find beginner-friendly tasks!
 
 ---
 
+## 🏛️ Architecture Decision Records (ADRs)
+
+`docs/ADR-NNN-*.md` records decisions that are hard to reverse and not
+obvious from reading the code alone — see `docs/ADR-001` through
+`docs/ADR-008` for the existing set and format.
+
+Write a new ADR when your PR:
+
+- Chooses between two or more genuinely viable approaches (a framework,
+  data model, consensus/arbitration mechanism, deployment topology, etc.)
+  and picking wrong would be expensive to undo later.
+- Changes a fee, reward-split, or economic parameter baked into the
+  contract or backend (e.g. `PLATFORM_FEE_BPS`), where the *why* behind the
+  chosen value or split isn't obvious from the diff.
+- Introduces or replaces a cross-cutting mechanism — a caching layer,
+  disaster-recovery topology, indexing strategy, arbitration model — that
+  other future PRs will need to understand before extending or replacing.
+
+You probably don't need one for a bug fix, a new UI component, an added
+test, a dependency bump, or an internal refactor that doesn't change any
+externally-observable decision.
+
+Each ADR must include the **Context**, **Decision**, **Rationale**
+(including alternatives considered and why they were rejected — not just
+the outcome), and **Consequences** sections in the existing format, and
+should link to the specific files/modules it governs so a future reader can
+find the implementation from the decision and vice versa. If you can't find
+solid evidence for *why* a past decision was made (no commit, PR, or doc
+explains it), say so explicitly in the ADR — mark it as reconstructed and
+unconfirmed — rather than inventing a plausible-sounding rationale.
+
+---
+
 ## Testing
 
 ### Frontend snapshot tests

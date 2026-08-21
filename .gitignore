@@ -24,6 +24,10 @@ Thumbs.db
 .idea/
 *.swp
 
+# Claude Code
+CLAUDE.md
+.claude/
+
 # Coverage
 coverage/
 backend/coverage/
