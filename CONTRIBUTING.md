@@ -109,7 +109,7 @@ Write a new ADR when your PR:
   data model, consensus/arbitration mechanism, deployment topology, etc.)
   and picking wrong would be expensive to undo later.
 - Changes a fee, reward-split, or economic parameter baked into the
-  contract or backend (e.g. `PLATFORM_FEE_BPS`), where the *why* behind the
+  contract or backend (e.g. `PLATFORM_FEE_BPS`), where the _why_ behind the
   chosen value or split isn't obvious from the diff.
 - Introduces or replaces a cross-cutting mechanism — a caching layer,
   disaster-recovery topology, indexing strategy, arbitration model — that
@@ -124,7 +124,7 @@ Each ADR must include the **Context**, **Decision**, **Rationale**
 the outcome), and **Consequences** sections in the existing format, and
 should link to the specific files/modules it governs so a future reader can
 find the implementation from the decision and vice versa. If you can't find
-solid evidence for *why* a past decision was made (no commit, PR, or doc
+solid evidence for _why_ a past decision was made (no commit, PR, or doc
 explains it), say so explicitly in the ADR — mark it as reconstructed and
 unconfirmed — rather than inventing a plausible-sounding rationale.
 

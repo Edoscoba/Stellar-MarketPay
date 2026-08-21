@@ -155,5 +155,5 @@ TTL strategy per content type").
 ## References
 
 - PR #93 — `Multi-CDN edge strategy with event-driven cache invalidation on
-  contract events` (merged 2026-07-29, closes #91)
+contract events` (merged 2026-07-29, closes #91)
 - `docs/CDN_STRATEGY.md`

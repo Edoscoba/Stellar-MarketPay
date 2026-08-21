@@ -24,11 +24,11 @@ Freelancer signups are recorded in an explicit **parent → child referral
 tree**, and job-completion rewards are distributed **on-chain** to up to 3
 ancestor levels of the completing freelancer, at decreasing percentages:
 
-| Level | Relationship | Bonus |
-| ----- | ------------ | ----- |
-| 1     | direct referrer | 2.00% of release amount |
-| 2     | referrer's referrer | 0.75% |
-| 3     | referrer's referrer's referrer | 0.25% |
+| Level | Relationship                   | Bonus                   |
+| ----- | ------------------------------ | ----------------------- |
+| 1     | direct referrer                | 2.00% of release amount |
+| 2     | referrer's referrer            | 0.75%                   |
+| 3     | referrer's referrer's referrer | 0.25%                   |
 
 - `contracts/marketpay-contract/src/referral.rs` — `register_referral()`
   (cycle detection + self-referral rejection), `calculate_tree_rewards()`,

@@ -164,7 +164,7 @@ summary).
 ## References
 
 - PR #94 — `Add multi-cluster DR (K8GB failover) and Argo Rollouts
-  blue-green deployment` (merged 2026-07-30)
+blue-green deployment` (merged 2026-07-30)
 - PR #52 — `Add Kubernetes scalable deployment setup` (the single-cluster
   design this superseded)
 - `docs/dr/architecture.md`, `docs/dr/runbook.md`, `docs/dr/game-day-report.md`
