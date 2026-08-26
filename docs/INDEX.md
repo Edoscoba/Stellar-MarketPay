@@ -173,6 +173,23 @@ Decisions that shaped Stellar MarketPay's architecture:
 
 ---
 
+### ADR-011: Plugin Platform for Third-Party Marketplace Extensions
+
+**File**: [ADR-011-plugin-platform.md](./ADR-011-plugin-platform.md)
+
+**Decision**: Sandboxed plugin execution via `child_process.fork()` + a stripped `vm.createContext`, with a mediated capability broker and a sandboxed-iframe UI surface
+
+**Key Points**:
+
+- Why the sandbox uses a forked OS process, not `worker_threads` — a real memory-exhaustion failure mode was found by testing and fixed
+- The disclosed, not-yet-closable network-egress gap for a plugin that deliberately attacks the sandbox, and how it's bounded today
+- Why a plugin can never intercept a wallet signing flow (opaque-origin iframe, not a policy)
+- Registry data model: submission, automated scan gate, review, versioning/rollback, install/uninstall with data removal
+
+**Status**: ✅ Accepted
+
+---
+
 ## ❓ FAQ & Help
 
 ### Frequently Asked Questions
