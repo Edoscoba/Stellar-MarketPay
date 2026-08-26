@@ -309,7 +309,10 @@ function decodePublicParams(kind, publicParams) {
     case "completion_count":
       return { minCount: publicParams.minCount };
     case "earnings_band":
-      return { minAmount: BigInt(publicParams.minAmount), maxAmount: BigInt(publicParams.maxAmount) };
+      return {
+        minAmount: BigInt(publicParams.minAmount),
+        maxAmount: BigInt(publicParams.maxAmount),
+      };
     case "dispute_free":
       return {};
     default:

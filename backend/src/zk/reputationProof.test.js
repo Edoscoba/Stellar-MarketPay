@@ -140,9 +140,9 @@ describe("zk/reputationProof — end to end", () => {
       allEncodedLeaves: encoded,
     });
     const resolveRevoked = () => ({ root, valid: false });
-    expect((await reputationProof.verifyProof(proof, { resolveEpoch: resolveRevoked })).reason).toBe(
-      "revoked"
-    );
+    expect(
+      (await reputationProof.verifyProof(proof, { resolveEpoch: resolveRevoked })).reason
+    ).toBe("revoked");
   });
 
   test("NEGATIVE: an epoch before the offending rating was included stays valid (revocation is not retroactive past its own inclusion)", async () => {
@@ -227,7 +227,12 @@ describe("zk/reputationProof — end to end", () => {
       allEncodedLeaves: encoded,
     });
     expect(
-      (await reputationProof.verifyProof(earningsProof, { resolveEpoch, purpose: "earnings-check" })).ok
+      (
+        await reputationProof.verifyProof(earningsProof, {
+          resolveEpoch,
+          purpose: "earnings-check",
+        })
+      ).ok
     ).toBe(true);
 
     const disputeProof = reputationProof.buildProof({
@@ -243,7 +248,8 @@ describe("zk/reputationProof — end to end", () => {
       allEncodedLeaves: encoded,
     });
     expect(
-      (await reputationProof.verifyProof(disputeProof, { resolveEpoch, purpose: "dispute-check" })).ok
+      (await reputationProof.verifyProof(disputeProof, { resolveEpoch, purpose: "dispute-check" }))
+        .ok
     ).toBe(true);
   });
 });

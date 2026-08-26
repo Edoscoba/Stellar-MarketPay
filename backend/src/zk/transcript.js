@@ -124,9 +124,7 @@ function hashContext(context) {
     `nonce=${context.nonce}`,
     `expiresAt=${context.expiresAt}`,
   ].join("\n");
-  return createHash("sha256")
-    .update(`MarketPay/ZKREP/context/v1\n${canonical}`, "utf8")
-    .digest();
+  return createHash("sha256").update(`MarketPay/ZKREP/context/v1\n${canonical}`, "utf8").digest();
 }
 
 /** Scalar coercion used by the verifier when reading proof bytes. */

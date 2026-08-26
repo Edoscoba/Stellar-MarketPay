@@ -73,9 +73,9 @@ describe("zk/statements — earnings_band", () => {
       amountValues: leaves.map((l) => l.value),
       amountBlindings: leaves.map((l) => l.blinding),
     });
-    expect(
-      stmt.verify(T("t"), { amountCommitments: leaves.map((l) => l.commitment) }, proof)
-    ).toBe(true);
+    expect(stmt.verify(T("t"), { amountCommitments: leaves.map((l) => l.commitment) }, proof)).toBe(
+      true
+    );
   });
 
   test("NEGATIVE: refuses to build a proof for a total outside the band", () => {

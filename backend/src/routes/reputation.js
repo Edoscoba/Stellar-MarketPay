@@ -123,7 +123,8 @@ router.get("/statements", (req, res) => {
 router.get("/:publicKey/summary", async (req, res, next) => {
   try {
     const epoch = await reputationService.latestEpoch(req.params.publicKey);
-    if (!epoch) return res.status(404).json({ error: "No reputation history for this subject yet" });
+    if (!epoch)
+      return res.status(404).json({ error: "No reputation history for this subject yet" });
     res.json({ success: true, data: epoch });
   } catch (err) {
     next(err);
@@ -200,7 +201,8 @@ function validateStatementParams(kind, params = {}) {
 
 function validateContext(context) {
   if (!context || typeof context !== "object") return "context is required";
-  if (!context.audience || typeof context.audience !== "string") return "context.audience is required";
+  if (!context.audience || typeof context.audience !== "string")
+    return "context.audience is required";
   if (!context.purpose || typeof context.purpose !== "string") return "context.purpose is required";
   if (!context.nonce || typeof context.nonce !== "string") return "context.nonce is required";
   if (!Number.isFinite(Number(context.expiresAt))) return "context.expiresAt (unix ms) is required";

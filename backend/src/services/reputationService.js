@@ -58,7 +58,8 @@ function toStroops(xlmDecimalString) {
 function serverSeedFor(subjectAddress) {
   // HMAC-derived from a fixed server key + subject; never transmitted.
   const key = process.env.REPUTATION_COMMITMENT_KEY || process.env.JWT_SECRET;
-  if (!key) throw new Error("reputationService: REPUTATION_COMMITMENT_KEY (or JWT_SECRET) required");
+  if (!key)
+    throw new Error("reputationService: REPUTATION_COMMITMENT_KEY (or JWT_SECRET) required");
   return ped.deriveBlinding(key, `subject-seed:${subjectAddress}`).toString(16);
 }
 
@@ -226,7 +227,12 @@ async function revokeRating({ commitmentId, reason, revokedBy }) {
 
     await client.query("COMMIT");
     logger.info(
-      { subject: commitment.subject_address, commitmentId, invalidatesFromEpoch, newEpoch: newEpoch.epoch },
+      {
+        subject: commitment.subject_address,
+        commitmentId,
+        invalidatesFromEpoch,
+        newEpoch: newEpoch.epoch,
+      },
       "Reputation rating revoked"
     );
     return { invalidatesFromEpoch, newEpoch };
@@ -269,7 +275,11 @@ async function latestEpoch(subjectAddress) {
     [subjectAddress]
   );
   if (!rows.length) return null;
-  return { epoch: rows[0].epoch, root: rows[0].root.toString("hex"), leafCount: rows[0].leaf_count };
+  return {
+    epoch: rows[0].epoch,
+    root: rows[0].root.toString("hex"),
+    leafCount: rows[0].leaf_count,
+  };
 }
 
 /**
@@ -308,7 +318,13 @@ async function getOwnOpenings(subjectAddress) {
  * public parameters, and the context (audience/purpose) it was proved for.
  * See the module doc comment above.
  */
-async function buildProofForSubject({ subjectAddress, statementKind, statementParams, count, context }) {
+async function buildProofForSubject({
+  subjectAddress,
+  statementKind,
+  statementParams,
+  count,
+  context,
+}) {
   const epochInfo = await latestEpoch(subjectAddress);
   if (!epochInfo) {
     const e = new Error("No reputation history for this subject yet");

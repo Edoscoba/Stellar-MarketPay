@@ -25,12 +25,19 @@ async function setJobRequirements(jobId, requirements) {
     await client.query("DELETE FROM job_reputation_requirements WHERE job_id = $1", [jobId]);
     for (const req of requirements) {
       if (!STATEMENT_KINDS.includes(req.statementKind)) {
-        throw Object.assign(new Error(`Invalid statementKind: ${req.statementKind}`), { status: 400 });
+        throw Object.assign(new Error(`Invalid statementKind: ${req.statementKind}`), {
+          status: 400,
+        });
       }
       await client.query(
         `INSERT INTO job_reputation_requirements (job_id, statement_kind, statement_params, required)
          VALUES ($1, $2, $3, $4)`,
-        [jobId, req.statementKind, JSON.stringify(req.statementParams || {}), req.required !== false]
+        [
+          jobId,
+          req.statementKind,
+          JSON.stringify(req.statementParams || {}),
+          req.required !== false,
+        ]
       );
     }
     await client.query("COMMIT");
@@ -115,7 +122,12 @@ async function attachApplicationProof({ applicationId, freelancerAddress, proof 
   );
 
   logger.info(
-    { applicationId, statementKind: proof.statementKind, verified: result.ok, reason: result.reason },
+    {
+      applicationId,
+      statementKind: proof.statementKind,
+      verified: result.ok,
+      reason: result.reason,
+    },
     "Application reputation proof recorded"
   );
 

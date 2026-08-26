@@ -38,8 +38,10 @@ const BLIND_GENERATOR_LABEL = "blind";
  * same literals, and a silent change to the derivation would silently
  * invalidate every anchored commitment in the database.
  */
-const G_BYTES_HEX = "0b06ca4e51bae368365f572f031f242adc8986ec3b0dfd3e3d5d89c717cffebf8574acd6ec51a686532bef74c245d4f906e32f5ca5b393e9f0fd8d18741aa342acfd17272e2f9ac39fd63a7d23226f63ef17c22529a3d8c00116a8b5cd1e4a9c";
-const H_BYTES_HEX = "155431b9513d6a1f2f5df59ff9b44f73f46174eba3c65aaf86fb5b0953bce905a772d023687e0f3c983e2e365bc0dabc190058cfff6aac22a9f24b404a9f457f74c52b97bff2a2b57755ba49ae0cde407bf0fa73410f81ccde07abc58a9212d5";
+const G_BYTES_HEX =
+  "0b06ca4e51bae368365f572f031f242adc8986ec3b0dfd3e3d5d89c717cffebf8574acd6ec51a686532bef74c245d4f906e32f5ca5b393e9f0fd8d18741aa342acfd17272e2f9ac39fd63a7d23226f63ef17c22529a3d8c00116a8b5cd1e4a9c";
+const H_BYTES_HEX =
+  "155431b9513d6a1f2f5df59ff9b44f73f46174eba3c65aaf86fb5b0953bce905a772d023687e0f3c983e2e365bc0dabc190058cfff6aac22a9f24b404a9f457f74c52b97bff2a2b57755ba49ae0cde407bf0fa73410f81ccde07abc58a9212d5";
 
 const G = bls.deserialize(Buffer.from(G_BYTES_HEX, "hex"));
 const H = bls.deserialize(Buffer.from(H_BYTES_HEX, "hex"));

@@ -83,7 +83,10 @@ function rootFromLeafHashes(leafHashes) {
   if (leafHashes.length === 0) return emptyRoot();
   if (leafHashes.length === 1) return leafHashes[0];
   const k = splitPoint(leafHashes.length);
-  return hashNode(rootFromLeafHashes(leafHashes.slice(0, k)), rootFromLeafHashes(leafHashes.slice(k)));
+  return hashNode(
+    rootFromLeafHashes(leafHashes.slice(0, k)),
+    rootFromLeafHashes(leafHashes.slice(k))
+  );
 }
 
 /** Merkle root over leaf byte-strings. */

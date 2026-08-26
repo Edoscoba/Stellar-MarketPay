@@ -30,20 +30,20 @@ Four statements, each reducible to one of two audited circuits
 (`backend/src/zk/rangeProof.js`, `backend/src/zk/equalityProof.js`) via the
 Pedersen commitment homomorphism:
 
-| Statement | Claim | Circuit |
-|---|---|---|
-| `rating_threshold` | avg(score) ≥ T over N jobs | range proof on `sum(score) - T·N ≥ 0` |
-| `completion_count` | N ≥ minimum | plain arithmetic (see "Scope decision" below) |
-| `earnings_band` | sum(amount) ∈ [lo, hi] | two range proofs |
-| `dispute_free` | sum(disputeFlag) = 0 | equality-to-zero proof (exact, not bounded) |
+| Statement          | Claim                      | Circuit                                       |
+| ------------------ | -------------------------- | --------------------------------------------- |
+| `rating_threshold` | avg(score) ≥ T over N jobs | range proof on `sum(score) - T·N ≥ 0`         |
+| `completion_count` | N ≥ minimum                | plain arithmetic (see "Scope decision" below) |
+| `earnings_band`    | sum(amount) ∈ [lo, hi]     | two range proofs                              |
+| `dispute_free`     | sum(disputeFlag) = 0       | equality-to-zero proof (exact, not bounded)   |
 
 **Scope decision — contiguous ranges, not hidden subsets.** A proof covers a
-*publicly-stated, contiguous leaf range* of the subject's history (e.g. "jobs
+_publicly-stated, contiguous leaf range_ of the subject's history (e.g. "jobs
 12 through 44"), not an arbitrarily-chosen hidden subset. Hiding which
-specific jobs contribute to a claim (rather than hiding their *values*)
+specific jobs contribute to a claim (rather than hiding their _values_)
 requires a set-membership circuit per element — a substantially larger
 circuit for a property this product doesn't currently need (a client cares
-whether the *statistic* holds, not which jobs it's drawn from). The range
+whether the _statistic_ holds, not which jobs it's drawn from). The range
 endpoints are visible to the verifier; every star rating, bid amount, and
 dispute outcome inside the range is not. This is the honest boundary of what
 v1 hides, stated plainly rather than implied.
@@ -66,7 +66,7 @@ statements. Rejected for v1:
   "Performance" below) — a browser or a lightweight service handles it
   without a WASM-compiled circuit or a multi-second setup phase.
 
-The trade-off: proof size is *linear* in bit-width for range proofs (a
+The trade-off: proof size is _linear_ in bit-width for range proofs (a
 32-bit `rating_threshold` proof is a few KB — see Performance), where a
 SNARK would be a constant ~200 bytes. Given Soroban's resource-based fee
 model rather than an L1 calldata-cost model, this is the right trade for a
@@ -100,7 +100,7 @@ a rating can verify their own leaf's inclusion.
 
 ### Replay / context binding
 
-Every circuit challenge is a Fiat–Shamir hash over the *entire* proof
+Every circuit challenge is a Fiat–Shamir hash over the _entire_ proof
 context: protocol version, subject, statement, epoch, root, leaf range, and
 a `context` object — `audience` (who this is for), `purpose` (what for),
 `nonce`, and `expiresAt` (`transcript.js`, `reputationProof.js`). Changing
@@ -115,16 +115,16 @@ ledger to maintain, because the binding is cryptographic, not bookkeeping.
 An epoch is a checkpoint of the subject's tree. The contract (and the
 off-chain mirror, `reputationService.resolveEpoch`) tracks one extra scalar
 per subject: `earliestInvalidatedEpoch`. Revoking a rating that was first
-included at epoch *K* sets this to `min(current, K)` — an O(1) write. A
-proof bound to epoch *E* is valid iff `E < earliestInvalidatedEpoch`. This
+included at epoch _K_ sets this to `min(current, K)` — an O(1) write. A
+proof bound to epoch _E_ is valid iff `E < earliestInvalidatedEpoch`. This
 invalidates every proof that could have depended on the revoked rating
-(anything anchored at or after *K*) and nothing else — a proof about "my
+(anything anchored at or after _K_) and nothing else — a proof about "my
 first 10 jobs" made before job #37 even existed is untouched by job #37
 later being revoked. See `reputation.rs`'s `revoke_from_epoch` and
 `reputationService.revokeRating`.
 
 New ratings arriving does **not** invalidate outstanding proofs: each new
-rating advances the *latest* epoch, but the contract retains a bounded
+rating advances the _latest_ epoch, but the contract retains a bounded
 history of `(epoch → root)` pairs (`MAX_RETAINED_EPOCHS = 64`), so a proof
 bound to an earlier, still-retained epoch keeps verifying. A proof bound to
 an epoch that has aged out of the retention window fails with
@@ -149,10 +149,10 @@ measures real Soroban budget consumption via `env.budget()` around
 reputation_tests -- --nocapture` to reproduce). At HEAD, for a 4-leaf
 boundary:
 
-| Statement | CPU instructions | Memory |
-|---|---|---|
-| `dispute_free` (equality proof) | 7,629,756 | 113,282 bytes |
-| `rating_threshold` (32-bit range proof) | 571,554,470 | 3,058,956 bytes |
+| Statement                               | CPU instructions | Memory          |
+| --------------------------------------- | ---------------- | --------------- |
+| `dispute_free` (equality proof)         | 7,629,756        | 113,282 bytes   |
+| `rating_threshold` (32-bit range proof) | 571,554,470      | 3,058,956 bytes |
 
 `dispute_free` is cheap and clearly viable for routine on-chain settlement —
 a small fraction of Soroban's per-transaction CPU instruction budget.
@@ -177,7 +177,7 @@ linear-in-bit-width cost for a constant-size pairing check. Until one of
 those lands, clients needing an on-chain-verified `rating_threshold` or
 `earnings_band` claim should use the off-chain path below for the
 verification itself and, if settlement requires an on-chain fact, anchor
-only the yes/no *result* via a transaction the client controls — not ask
+only the yes/no _result_ via a transaction the client controls — not ask
 this contract to run the range-proof verifier in the same transaction as
 the action it gates.
 
@@ -203,7 +203,7 @@ Two ways to build a proof, and what the operator that builds it learns:
   different from what the platform already has), which statement was
   proved, and to whom. Convenient; not zero-trust toward the platform.
 - **Client-side proving**: the subject fetches their own openings (`GET
-  /api/reputation/:publicKey/openings`, self-only) and runs
+/api/reputation/:publicKey/openings`, self-only) and runs
   `backend/src/zk/*.js` locally — the same modules, no server-only
   dependency beyond Node's `crypto`, which any bundler polyfills with Web
   Crypto. The platform learns nothing beyond "a proof was submitted
@@ -219,7 +219,7 @@ already recorded elsewhere in the schema.
 ### Trust boundary (state plainly, because an unstated one is where trust erodes)
 
 The platform backend sees every rating's plaintext at issuance — identical
-to today's public `ratings` table. **What changes is what *other users* see
+to today's public `ratings` table. **What changes is what _other users_ see
 by default.** Today, any authenticated caller can read a freelancer's full
 rating history. After this change, a freelancer's default view stays
 `public` (`profiles.reputation_visibility`, defaulting to `'public'` —
@@ -267,8 +267,8 @@ Down migration drops all five tables and the profiles column cleanly.
    audited backfill job if the product wants pre-migration history to be
    provable, with its own review of that trade-off.
 4. Every new route is additive (`/api/reputation/*`, `PUT
-   /api/jobs/:id/reputation-requirement`, `POST
-   /api/applications/:id/reputation-proof`); no existing endpoint's request
+/api/jobs/:id/reputation-requirement`, `POST
+/api/applications/:id/reputation-proof`); no existing endpoint's request
    or response shape changes except `GET /api/applications/job/:jobId`,
    which gains one new field per application (`reputationProofs: []`,
    empty array when none exist — additive, not a breaking change for
@@ -279,12 +279,12 @@ Down migration drops all five tables and the profiles column cleanly.
 **Off-chain (proving/verifying in JS — browser or service).** Measured on
 this development machine (Node 24, no hardware acceleration):
 
-| Operation | Time |
-|---|---|
-| Scalar multiplication (fixed 4-bit window) | ~5 ms |
-| Generator derivation (nothing-up-my-sleeve) | ~10 ms |
-| 32-bit range proof: prove | tens of ms |
-| 32-bit range proof: verify | tens of ms |
+| Operation                                               | Time                |
+| ------------------------------------------------------- | ------------------- |
+| Scalar multiplication (fixed 4-bit window)              | ~5 ms               |
+| Generator derivation (nothing-up-my-sleeve)             | ~10 ms              |
+| 32-bit range proof: prove                               | tens of ms          |
+| 32-bit range proof: verify                              | tens of ms          |
 | Full `rating_threshold` proof (20-job range) end to end | well under 1 second |
 
 Viable in a browser without a proving service, which is why the hosted
@@ -329,8 +329,8 @@ about on-chain viability for a different circuit running the same protocol.
   single on-chain transaction** (see "On-chain verification" for the
   numbers and candidate fixes). `dispute_free` and `completion_count` are
   cheap and viable on-chain today.
-- The contiguous-range scope decision means a client can see *which* leaf
-  indices (roughly, *when*) contributed to a claim, even though not their
+- The contiguous-range scope decision means a client can see _which_ leaf
+  indices (roughly, _when_) contributed to a claim, even though not their
   values. A determined verifier could correlate leaf-range timing against
   public job-posting activity to narrow down which jobs are involved. This
   is a real, disclosed limitation, not an oversight.

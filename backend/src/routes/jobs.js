@@ -2911,6 +2911,20 @@ router.post("/bulk-boost", verifyJWT, jobCreationRateLimiter, async (req, res, n
  *         schema: { type: string, format: uuid }
  *     responses:
  *       200: { description: Requirements }
+ */
+router.get("/:id/reputation-requirement", generalJobRateLimiter, async (req, res, next) => {
+  try {
+    const { getJobRequirements } = require("../services/reputationRequirementService");
+    const requirements = await getJobRequirements(req.params.id);
+    res.json({ success: true, data: requirements });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * @swagger
+ * /api/jobs/{id}/reputation-requirement:
  *   put:
  *     summary: Set a job's verifiable reputation requirements
  *     description: >
@@ -2950,16 +2964,6 @@ router.post("/bulk-boost", verifyJWT, jobCreationRateLimiter, async (req, res, n
  *       403: { description: Forbidden — not the job's client }
  *       404: { description: Job not found }
  */
-router.get("/:id/reputation-requirement", generalJobRateLimiter, async (req, res, next) => {
-  try {
-    const { getJobRequirements } = require("../services/reputationRequirementService");
-    const requirements = await getJobRequirements(req.params.id);
-    res.json({ success: true, data: requirements });
-  } catch (e) {
-    next(e);
-  }
-});
-
 router.put(
   "/:id/reputation-requirement",
   verifyJWT,
@@ -2976,7 +2980,10 @@ router.put(
       if (!Array.isArray(requirements)) {
         return res.status(400).json({ success: false, error: "requirements must be an array" });
       }
-      const { setJobRequirements, getJobRequirements } = require("../services/reputationRequirementService");
+      const {
+        setJobRequirements,
+        getJobRequirements,
+      } = require("../services/reputationRequirementService");
       await setJobRequirements(req.params.id, requirements);
       const saved = await getJobRequirements(req.params.id);
       res.json({ success: true, data: saved });

@@ -80,8 +80,7 @@ function ratingThreshold({ thresholdScaled, count }) {
     prove(transcript, { scoreValues, scoreBlindings }) {
       if (scoreValues.length !== count) throw new Error("statements: score count mismatch");
       const sumBlind = sumScalars(scoreBlindings);
-      const trueDiff =
-        scoreValues.reduce((a, v) => a + BigInt(v), 0n) - threshold * BigInt(count);
+      const trueDiff = scoreValues.reduce((a, v) => a + BigInt(v), 0n) - threshold * BigInt(count);
       if (trueDiff < 0n) {
         throw new Error("statements: rating_threshold does not hold for given values");
       }
@@ -175,8 +174,16 @@ function earningsBand({ minAmount, maxAmount, count }) {
       const lowerTarget = ped.shiftByConstant(sumCommitment, -lo);
       const negSum = ped.scale(sumCommitment, bls.frNeg(1n));
       const upperTarget = ped.shiftByConstant(negSum, hi);
-      const lowerOk = rangeProof.verify(transcript.fork("earnings.lower"), lowerTarget, proof.lowerProof);
-      const upperOk = rangeProof.verify(transcript.fork("earnings.upper"), upperTarget, proof.upperProof);
+      const lowerOk = rangeProof.verify(
+        transcript.fork("earnings.lower"),
+        lowerTarget,
+        proof.lowerProof
+      );
+      const upperOk = rangeProof.verify(
+        transcript.fork("earnings.upper"),
+        upperTarget,
+        proof.upperProof
+      );
       return lowerOk && upperOk;
     },
   };
@@ -203,7 +210,11 @@ function disputeFree({ count }) {
       }
       const sumBlind = sumScalars(disputeBlindings);
       const sumCommitment = ped.commit(0n, sumBlind);
-      return equalityProof.prove(transcript, { commitment: sumCommitment, target: 0n, blinding: sumBlind });
+      return equalityProof.prove(transcript, {
+        commitment: sumCommitment,
+        target: 0n,
+        blinding: sumBlind,
+      });
     },
 
     verify(transcript, { disputeCommitments }, proof) {

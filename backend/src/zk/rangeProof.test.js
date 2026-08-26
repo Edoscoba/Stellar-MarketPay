@@ -95,9 +95,9 @@ describe("zk/rangeProof", () => {
 
   test("verify() never throws on malformed input, only returns false", () => {
     const commitment = ped.commit(1n, ped.randomBlinding());
-    expect(rangeProof.verify(T("t"), commitment, { bitWidth: 8, bitCommitments: [], bitProofs: [] })).toBe(
-      false
-    );
+    expect(
+      rangeProof.verify(T("t"), commitment, { bitWidth: 8, bitCommitments: [], bitProofs: [] })
+    ).toBe(false);
     expect(rangeProof.verify(T("t"), commitment, null)).toBe(false);
   });
 });

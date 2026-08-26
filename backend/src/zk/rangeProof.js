@@ -93,7 +93,9 @@ function prove(transcript, { value, blinding, bitWidth }) {
   const lastBlinding = bls.frMul(bls.frSub(blinding, weightedSum), lastWeightInv);
   bitBlindings.push(lastBlinding);
 
-  const bitCommitments = bits.map((b, i) => bls.add(bls.multiply(G, b), bls.multiply(H, bitBlindings[i])));
+  const bitCommitments = bits.map((b, i) =>
+    bls.add(bls.multiply(G, b), bls.multiply(H, bitBlindings[i]))
+  );
 
   transcript.absorbUint("range.bitWidth", bitWidth);
   transcript.absorbPoints("range.bitCommitments", bitCommitments);
@@ -107,7 +109,9 @@ function prove(transcript, { value, blinding, bitWidth }) {
 
     // Simulated branch: pick response + challenge freely, derive its
     // commitment "in reverse" from the verification equation.
-    const simChallenge = bls.frMod(BigInt(`0x${require("crypto").randomBytes(32).toString("hex")}`));
+    const simChallenge = bls.frMod(
+      BigInt(`0x${require("crypto").randomBytes(32).toString("hex")}`)
+    );
     const simResponse = bls.frMod(BigInt(`0x${require("crypto").randomBytes(32).toString("hex")}`));
     // Branch statement for b=k: Ci - k*G = rho*H. Verify: simResponse*H ?= A + simChallenge*(Ci - k*G)
     const target = sim === 1 ? bls.subtract(Ci, G) : Ci;

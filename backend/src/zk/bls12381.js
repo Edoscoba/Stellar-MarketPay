@@ -382,7 +382,9 @@ function deriveGenerator(label, domain = "MarketPay/ZKREP/G1/v1") {
     // 48 bytes of candidate x from two chained SHA-256 blocks.
     const seed = `${domain}|${label}|${counter}`;
     const h1 = createHash("sha256").update(seed).digest();
-    const h2 = createHash("sha256").update(Buffer.concat([h1, Buffer.from("x")])).digest();
+    const h2 = createHash("sha256")
+      .update(Buffer.concat([h1, Buffer.from("x")]))
+      .digest();
     const x = bytesToFp(Buffer.concat([h1, h2]).subarray(0, FP_BYTES)) % P;
 
     const rhs = fpAdd(fpMul(fpSqr(x), x), CURVE_B);

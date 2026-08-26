@@ -71,7 +71,9 @@ function createFakePool() {
       return { rows: [{ id: row.id, leaf_index: row.leaf_index }] };
     }
 
-    if (text.startsWith("SELECT leaf_index, score_commitment, amount_commitment, dispute_commitment")) {
+    if (
+      text.startsWith("SELECT leaf_index, score_commitment, amount_commitment, dispute_commitment")
+    ) {
       const subj = params[0];
       const rows = commitments
         .filter((c) => c.subject_address === subj)
@@ -88,7 +90,9 @@ function createFakePool() {
 
     if (text.startsWith("SELECT COALESCE(MAX(epoch), 0) + 1 AS next_epoch")) {
       const subj = params[0];
-      const max = epochs.filter((e) => e.subject_address === subj).reduce((m, e) => Math.max(m, e.epoch), 0);
+      const max = epochs
+        .filter((e) => e.subject_address === subj)
+        .reduce((m, e) => Math.max(m, e.epoch), 0);
       return { rows: [{ next_epoch: max + 1 }] };
     }
 
@@ -103,14 +107,19 @@ function createFakePool() {
       return { rows: [] };
     }
 
-    if (text.startsWith("SELECT id, subject_address, leaf_index, revoked_at") && text.includes("FOR UPDATE")) {
+    if (
+      text.startsWith("SELECT id, subject_address, leaf_index, revoked_at") &&
+      text.includes("FOR UPDATE")
+    ) {
       const row = commitments.find((c) => c.id === params[0]);
       return { rows: row ? [row] : [] };
     }
 
     if (text.startsWith("SELECT MIN(epoch) AS epoch FROM reputation_epochs")) {
       const [subj, leafIndex] = params;
-      const candidates = epochs.filter((e) => e.subject_address === subj && e.leaf_count > leafIndex);
+      const candidates = epochs.filter(
+        (e) => e.subject_address === subj && e.leaf_count > leafIndex
+      );
       const min = candidates.length ? Math.min(...candidates.map((e) => e.epoch)) : null;
       return { rows: [{ epoch: min }] };
     }
@@ -136,14 +145,22 @@ function createFakePool() {
       return { rows: [] };
     }
 
-    if (text.startsWith("SELECT MIN(invalidates_from_epoch) AS epoch FROM reputation_revocations")) {
+    if (
+      text.startsWith("SELECT MIN(invalidates_from_epoch) AS epoch FROM reputation_revocations")
+    ) {
       const subj = params[0];
       const candidates = revocations.filter((r) => r.subject_address === subj);
-      const min = candidates.length ? Math.min(...candidates.map((r) => r.invalidates_from_epoch)) : null;
+      const min = candidates.length
+        ? Math.min(...candidates.map((r) => r.invalidates_from_epoch))
+        : null;
       return { rows: [{ epoch: min }] };
     }
 
-    if (text.startsWith("SELECT root FROM reputation_epochs WHERE subject_address = $1 AND epoch = $2")) {
+    if (
+      text.startsWith(
+        "SELECT root FROM reputation_epochs WHERE subject_address = $1 AND epoch = $2"
+      )
+    ) {
       const [subj, epoch] = params;
       const row = epochs.find((e) => e.subject_address === subj && e.epoch === epoch);
       return { rows: row ? [{ root: row.root }] : [] };
@@ -306,9 +323,9 @@ describe("reputationService — DB-backed lifecycle", () => {
       count: 5,
       context: { audience: "A", purpose: "P", nonce: "n", expiresAt: Date.now() + 3600_000 },
     });
-    expect((await reputationService.verifyProofOffChain(proof, { audience: "A", purpose: "P" })).ok).toBe(
-      true
-    );
+    expect(
+      (await reputationService.verifyProofOffChain(proof, { audience: "A", purpose: "P" })).ok
+    ).toBe(true);
 
     // Revoke the very first rating in the tree — it was included at epoch 1,
     // which is <= this proof's epoch (5), so the proof must now fail.
