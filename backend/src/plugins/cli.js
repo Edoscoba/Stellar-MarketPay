@@ -37,7 +37,13 @@ const FIXTURES = {
     created_at: new Date().toISOString(),
   }),
   "applications.listForJob": () => [
-    { id: "fixture-app-1", freelancer_address: "GFIXTUREFREELANCER1", bid_amount: "1400.0000000", status: "pending", created_at: new Date().toISOString() },
+    {
+      id: "fixture-app-1",
+      freelancer_address: "GFIXTUREFREELANCER1",
+      bid_amount: "1400.0000000",
+      status: "pending",
+      created_at: new Date().toISOString(),
+    },
   ],
   "profile.get": ({ publicKey }) => ({
     public_key: publicKey || "GFIXTUREUSER1",
@@ -47,11 +53,15 @@ const FIXTURES = {
     completed_jobs: 12,
   }),
   "notifications.send": (params) => {
-    console.log(`  [fixture] would send notification to ${params.recipientAddress}: "${params.message}"`);
+    console.log(
+      `  [fixture] would send notification to ${params.recipientAddress}: "${params.message}"`
+    );
     return { sent: true };
   },
   "network.fetch": () => {
-    throw new Error("network.fetch is not stubbed offline — rerun with --live and a granted network:<host> permission");
+    throw new Error(
+      "network.fetch is not stubbed offline — rerun with --live and a granted network:<host> permission"
+    );
   },
 };
 
@@ -76,7 +86,9 @@ function validateAndScan(manifest, source) {
   if (!scan.passed) {
     console.error("Security scan failed:");
     for (const finding of scan.findings) {
-      console.error(`  - [${finding.kind}]${finding.line ? ` line ${finding.line}:` : ""} ${finding.message}`);
+      console.error(
+        `  - [${finding.kind}]${finding.line ? ` line ${finding.line}:` : ""} ${finding.message}`
+      );
     }
     process.exit(1);
   }
@@ -135,7 +147,9 @@ async function main() {
   const [command, dir] = args._;
 
   if (!command || !dir) {
-    console.error("Usage: node src/plugins/cli.js <run|scan> <plugin-dir> [--hook name] [--payload json] [--live]");
+    console.error(
+      "Usage: node src/plugins/cli.js <run|scan> <plugin-dir> [--hook name] [--payload json] [--live]"
+    );
     process.exit(1);
   }
 
@@ -147,8 +161,12 @@ async function main() {
   if (command === "run") {
     const hookName = args.hook || "manual.test";
     const payload = args.payload ? JSON.parse(args.payload) : {};
-    console.log(`Running "${manifest.id}" for hook "${hookName}" (${args.live ? "live" : "offline/fixtures"})...`);
-    const result = args.live ? await runLive(source, hookName, payload) : await runOffline(source, hookName, payload);
+    console.log(
+      `Running "${manifest.id}" for hook "${hookName}" (${args.live ? "live" : "offline/fixtures"})...`
+    );
+    const result = args.live
+      ? await runLive(source, hookName, payload)
+      : await runOffline(source, hookName, payload);
     console.log("Result:", JSON.stringify(result, null, 2));
     return;
   }

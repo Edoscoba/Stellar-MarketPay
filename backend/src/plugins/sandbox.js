@@ -146,7 +146,9 @@ function runPlugin({
     readyTimeoutHandle = setTimeout(() => {
       settle(
         reject,
-        new PluginError(`plugin "${pluginId}" sandbox process failed to start`, { code: "START_FAILED" })
+        new PluginError(`plugin "${pluginId}" sandbox process failed to start`, {
+          code: "START_FAILED",
+        })
       );
     }, READY_TIMEOUT_MS);
 
@@ -206,7 +208,12 @@ function runPlugin({
           const result = await onBrokerCall(msg.method, msg.params);
           child.send({ type: "broker-response", callId: msg.callId, ok: true, value: result });
         } catch (err) {
-          child.send({ type: "broker-response", callId: msg.callId, ok: false, error: err.message });
+          child.send({
+            type: "broker-response",
+            callId: msg.callId,
+            ok: false,
+            error: err.message,
+          });
         }
         return;
       }
@@ -249,10 +256,13 @@ function runPlugin({
           : "";
       settle(
         reject,
-        new PluginError(`plugin "${pluginId}" sandbox process exited abnormally (${detail})${oomHint}`, {
-          code: "PROCESS_CRASHED",
-          cause: stderrBuf,
-        })
+        new PluginError(
+          `plugin "${pluginId}" sandbox process exited abnormally (${detail})${oomHint}`,
+          {
+            code: "PROCESS_CRASHED",
+            cause: stderrBuf,
+          }
+        )
       );
     });
   });

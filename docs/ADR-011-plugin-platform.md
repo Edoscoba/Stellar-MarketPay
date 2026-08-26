@@ -53,7 +53,7 @@ it.
 to one `installer_address`; a private plugin (`plugins.visibility = 'private'`)
 is further scoped to one `org_address` and invisible to every other
 installer (`pluginService.listPlugins`, `installPlugin`'s visibility check).
-Every broker call an invocation makes is scoped to the *installing* user's
+Every broker call an invocation makes is scoped to the _installing_ user's
 own data by construction — the broker has no method that takes an
 arbitrary "whose data" parameter separate from the installation's own
 identity.
@@ -83,7 +83,7 @@ was fine). Writing the negative test for a plugin that exhausts memory
 (`sandbox.test.js`'s "a plugin that allocates one huge block cannot crash
 the host process") surfaced that a **single allocation exceeding the
 configured heap** — `new Array(1e7).fill("x")` in a tight loop — hits V8's
-*fatal* out-of-memory path rather than the graceful, catchable one.
+_fatal_ out-of-memory path rather than the graceful, catchable one.
 A V8 fatal OOM is a native abort: not a JS exception, not a `worker`
 `'error'` event, unconditional. For a `worker_threads` thread, sharing one
 OS process with the code that spawned it, that abort **takes the entire
@@ -103,8 +103,8 @@ same reproduction. `sandbox.test.js`'s memory-bomb test is the regression
 guard for this specific finding.
 
 **Sandbox limitations — stated plainly, not left implicit.** Node's own
-documentation says: *"the `vm` module is not a security mechanism; do not
-use it to run untrusted code."* Taken seriously, this means
+documentation says: _"the `vm` module is not a security mechanism; do not
+use it to run untrusted code."_ Taken seriously, this means
 `vm.createContext` alone does not stop a sufficiently determined plugin
 from escaping to the outer (still-trusted, still full-Node) realm inside
 its own child process — verified directly: an object injected into the
@@ -112,12 +112,12 @@ sandbox (`marketpay`) carries a `.constructor` chain back to the outer
 realm's `Function`, and `marketpay.constructor.constructor("return
 process")()` reaches full Node access in that process, `codeGeneration:
 { strings: false }` notwithstanding (that setting blocks code generation
-*in the restricted context*; the constructor-chain trick generates the new
-function in the *outer*, unrestricted context, then merely calls the
+_in the restricted context_; the constructor-chain trick generates the new
+function in the _outer_, unrestricted context, then merely calls the
 result). Two things narrow this gap:
 
 - The forked-process boundary above still holds regardless — an escape
-  reaches the *child's* Node APIs, never the host process or another
+  reaches the _child's_ Node APIs, never the host process or another
   plugin's process. This is a real, contained blast radius, not the whole
   system.
 - Node's Permission Model (`--permission`, no `--allow-*` grants) closes
@@ -143,7 +143,7 @@ result). Two things narrow this gap:
 
 **Not WebAssembly.** A WASM runtime was considered as the sandbox
 foundation and set aside for this PR: it would give strong capability
-isolation *natively* (no ambient host object model to walk a constructor
+isolation _natively_ (no ambient host object model to walk a constructor
 chain through, closing exactly the gap above), but requires a plugin
 author to target WASM or a second build toolchain, and this platform has
 no existing WASM tooling to build on. The forked-process + `vm` design
@@ -166,7 +166,7 @@ policy), and — the specific property the issue calls "critical" —
 **cannot reach `window.freighter` or any wallet extension's injected
 API**, because extensions inject content scripts by origin-matching rules
 that an opaque `srcDoc` origin never satisfies. The only channel is
-`postMessage`; if a plugin's UI needs a signature, it posts a *request*
+`postMessage`; if a plugin's UI needs a signature, it posts a _request_
 describing what to sign, and the actual Freighter flow runs entirely in
 the host's own trusted UI — the plugin is told the outcome, never given
 the wallet API, the private key, or a code path that could auto-approve.
@@ -178,7 +178,7 @@ the wallet API, the private key, or a code path that could auto-approve.
 - **Template**: `backend/src/plugins/templates/workflow-hook/` — a working
   `plugin.json` + `index.js` + README.
 - **Local test harness**: `backend/src/plugins/cli.js` — runs a plugin
-  directory through the *real* sandbox (`sandbox.js`, unmocked) against
+  directory through the _real_ sandbox (`sandbox.js`, unmocked) against
   either offline fixtures (default; no database, no network) or `--live`
   data. Directly answers "provide a testing harness so a plugin can be
   tested without a live marketplace."
@@ -220,7 +220,7 @@ runs at all.
 
 **Versioning, updates, rollback**: `plugins.active_version_id` points at
 one approved `plugin_versions` row. Publishing a new release and rolling
-back to an older one are the *same* operation — moving that pointer — and
+back to an older one are the _same_ operation — moving that pointer — and
 neither ever deletes or rewrites a version row, so a rollback is instant
 and a previously-installed version's exact source is always still on
 record.

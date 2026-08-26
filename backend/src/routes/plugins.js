@@ -32,7 +32,14 @@ const generalPluginRateLimiter = createRateLimiter(60, 1);
  *       200: { description: Metadata }
  */
 router.get("/meta", (req, res) => {
-  res.json({ success: true, data: { extensionPoints: EXTENSION_POINTS, workflowEvents: WORKFLOW_EVENTS, permissionKinds: PERMISSION_KINDS } });
+  res.json({
+    success: true,
+    data: {
+      extensionPoints: EXTENSION_POINTS,
+      workflowEvents: WORKFLOW_EVENTS,
+      permissionKinds: PERMISSION_KINDS,
+    },
+  });
 });
 
 /**
@@ -60,6 +67,23 @@ router.get("/", generalPluginRateLimiter, async (req, res, next) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/plugins/private:
+ *   get:
+ *     summary: List the caller's own organisation's private plugins
+ *     description: >
+ *       Private plugins are visible only to the one organisation
+ *       (`plugins.org_address`) they belong to — never in the public
+ *       listing (`GET /api/plugins`), and never to a different caller.
+ *     tags: [Plugins]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Private plugins }
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ */
 router.get("/private", generalPluginRateLimiter, verifyJWT, async (req, res, next) => {
   try {
     const plugins = await pluginService.listPlugins({

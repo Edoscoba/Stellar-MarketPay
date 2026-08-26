@@ -51,14 +51,16 @@ function brokerCall(method, params) {
 /** A console that reaches the host's logs (capped, prefixed) without
  *  handing the plugin a real stdout/stderr stream or any Node stream API. */
 function sandboxedConsole() {
-  const relay = (level) => (...args) => {
-    try {
-      const line = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
-      process.send({ type: "log", level, line: String(line).slice(0, 2000) });
-    } catch {
-      // A plugin that can't even be console.log'd safely just loses the log line.
-    }
-  };
+  const relay =
+    (level) =>
+    (...args) => {
+      try {
+        const line = args.map((a) => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
+        process.send({ type: "log", level, line: String(line).slice(0, 2000) });
+      } catch {
+        // A plugin that can't even be console.log'd safely just loses the log line.
+      }
+    };
   return { log: relay("log"), warn: relay("warn"), error: relay("error"), info: relay("info") };
 }
 
@@ -105,7 +107,9 @@ async function run(source, hookName, payload) {
     const pluginExport = script.runInContext(context, { timeout: 4500 });
 
     if (!pluginExport || typeof pluginExport.onEvent !== "function") {
-      throw new Error('plugin must define a global `plugin` object with an `onEvent(payload)` function');
+      throw new Error(
+        "plugin must define a global `plugin` object with an `onEvent(payload)` function"
+      );
     }
 
     const result = await pluginExport.onEvent(payload, { hook: hookName });
@@ -113,7 +117,9 @@ async function run(source, hookName, payload) {
     // it can terminate the process before a large message finishes writing
     // to the IPC pipe, silently dropping it. Only exit once send's callback
     // confirms the message was handed off.
-    process.send({ type: "result", value: result === undefined ? null : result }, () => process.exit(0));
+    process.send({ type: "result", value: result === undefined ? null : result }, () =>
+      process.exit(0)
+    );
   } catch (err) {
     process.send(
       {

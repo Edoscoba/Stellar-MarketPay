@@ -88,7 +88,10 @@ function scanSource(source) {
   const findings = [];
 
   if (Buffer.byteLength(source, "utf8") > MAX_SOURCE_BYTES) {
-    return { passed: false, findings: [{ kind: "too-large", message: `source exceeds ${MAX_SOURCE_BYTES} bytes` }] };
+    return {
+      passed: false,
+      findings: [{ kind: "too-large", message: `source exceeds ${MAX_SOURCE_BYTES} bytes` }],
+    };
   }
 
   try {

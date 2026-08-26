@@ -65,7 +65,9 @@ interface PluginFrameProps {
   /** Called when the plugin's UI asks the host to run a real wallet
    *  signing flow. The host renders its own confirmation UI (not shown by
    *  this component) and resolves with the outcome. */
-  onRequestSign: (payload: PluginRequestSignPayload) => Promise<{ signed: boolean; signedXdr?: string }>;
+  onRequestSign: (
+    payload: PluginRequestSignPayload
+  ) => Promise<{ signed: boolean; signedXdr?: string }>;
   /** Called for a mediated data request (mirrors backend/src/plugins/broker.js's
    *  method allowlist) — e.g. `{ method: "jobs.get", params: {...} }`. */
   onDataRequest: (method: string, params: unknown) => Promise<unknown>;
@@ -157,7 +159,10 @@ export default function PluginFrame({
       // reply is only meaningful to the exact frame that asked, and this
       // keeps the contract explicit even though "*" would work practically
       // for a same-content-every-time srcDoc frame.
-      win.postMessage({ source: "marketpay-host", type: "response", callId, ok, value, error }, "*");
+      win.postMessage(
+        { source: "marketpay-host", type: "response", callId, ok, value, error },
+        "*"
+      );
     },
     []
   );
@@ -205,7 +210,8 @@ export default function PluginFrame({
         role="alert"
         className="rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200"
       >
-        Plugin &ldquo;{pluginName}&rdquo; failed to load and was disabled for this session: {crashed}
+        Plugin &ldquo;{pluginName}&rdquo; failed to load and was disabled for this session:{" "}
+        {crashed}
       </div>
     );
   }
@@ -220,7 +226,12 @@ export default function PluginFrame({
       // plugin limitation.
       sandbox="allow-scripts"
       srcDoc={buildSandboxDocument(uiSource)}
-      style={{ width: "100%", height: heightPx, border: "1px solid var(--border-color, #e5e7eb)", borderRadius: 8 }}
+      style={{
+        width: "100%",
+        height: heightPx,
+        border: "1px solid var(--border-color, #e5e7eb)",
+        borderRadius: 8,
+      }}
       onError={() => setCrashed("frame failed to render")}
     />
   );

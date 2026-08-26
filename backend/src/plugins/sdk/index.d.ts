@@ -96,4 +96,11 @@ declare global {
   var marketpay: MarketPaySDK;
 }
 
-export type { MarketPayPlugin, MarketPaySDK, PluginEventContext, JobSummary, ApplicationSummary, ProfileSummary };
+export type {
+  MarketPayPlugin,
+  MarketPaySDK,
+  PluginEventContext,
+  JobSummary,
+  ApplicationSummary,
+  ProfileSummary,
+};

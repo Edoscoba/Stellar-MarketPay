@@ -25,7 +25,13 @@ const logger = createServiceLogger("plugin-service");
  * review process including automated security scanning of submitted
  * code").
  */
-async function submitPluginVersion({ authorAddress, manifestJson, source, visibility, orgAddress }) {
+async function submitPluginVersion({
+  authorAddress,
+  manifestJson,
+  source,
+  visibility,
+  orgAddress,
+}) {
   assertManifestSize(manifestJson);
   let manifest;
   try {
@@ -66,12 +72,20 @@ async function submitPluginVersion({ authorAddress, manifestJson, source, visibi
        -- Ownership never transfers via re-submission: reject if the
        -- existing plugin belongs to a different author.
        WHERE plugins.author_address = EXCLUDED.author_address`,
-      [manifest.id, manifest.name, manifest.description || null, authorAddress, visibility || "public", orgAddress || null]
+      [
+        manifest.id,
+        manifest.name,
+        manifest.description || null,
+        authorAddress,
+        visibility || "public",
+        orgAddress || null,
+      ]
     );
 
-    const { rows: ownerCheck } = await client.query("SELECT author_address FROM plugins WHERE id = $1", [
-      manifest.id,
-    ]);
+    const { rows: ownerCheck } = await client.query(
+      "SELECT author_address FROM plugins WHERE id = $1",
+      [manifest.id]
+    );
     if (!ownerCheck.length || ownerCheck[0].author_address !== authorAddress) {
       const e = new Error("Forbidden: this plugin id belongs to a different author");
       e.status = 403;
@@ -133,7 +147,10 @@ async function reviewPluginVersion({ versionId, approve, reviewerAddress, notes 
  * already-approved plugin_versions row, and neither touches version rows.
  */
 async function publishVersion({ pluginId, versionId, publisherAddress }) {
-  const { rows: pluginRows } = await pool.query("SELECT author_address FROM plugins WHERE id = $1", [pluginId]);
+  const { rows: pluginRows } = await pool.query(
+    "SELECT author_address FROM plugins WHERE id = $1",
+    [pluginId]
+  );
   if (!pluginRows.length) {
     const e = new Error("Plugin not found");
     e.status = 404;
@@ -159,9 +176,10 @@ async function publishVersion({ pluginId, versionId, publisherAddress }) {
     `UPDATE plugins SET active_version_id = $2, status = 'published', updated_at = NOW() WHERE id = $1`,
     [pluginId, versionId]
   );
-  await pool.query("UPDATE plugin_versions SET published_at = NOW() WHERE id = $1 AND published_at IS NULL", [
-    versionId,
-  ]);
+  await pool.query(
+    "UPDATE plugin_versions SET published_at = NOW() WHERE id = $1 AND published_at IS NULL",
+    [versionId]
+  );
 
   logger.info({ pluginId, versionId, publisherAddress }, "Plugin version published");
   return { pluginId, activeVersionId: versionId };
@@ -221,7 +239,9 @@ async function installPlugin({ pluginId, installerAddress, requestedPermissions,
 
   const manifestPermissions = plugin.manifest.permissions || [];
   const granted = (requestedPermissions || []).filter((p) => manifestPermissions.includes(p));
-  const rejectedExtras = (requestedPermissions || []).filter((p) => !manifestPermissions.includes(p));
+  const rejectedExtras = (requestedPermissions || []).filter(
+    (p) => !manifestPermissions.includes(p)
+  );
   if (rejectedExtras.length) {
     const e = new Error(
       `cannot grant permissions the plugin did not declare: ${rejectedExtras.join(", ")}`
@@ -241,7 +261,13 @@ async function installPlugin({ pluginId, installerAddress, requestedPermissions,
        uninstalled_at = NULL,
        installed_at = NOW()
      RETURNING id, plugin_id, granted_permissions, installed_at`,
-    [pluginId, plugin.active_version_id, installerAddress, JSON.stringify(granted), JSON.stringify(config || {})]
+    [
+      pluginId,
+      plugin.active_version_id,
+      installerAddress,
+      JSON.stringify(granted),
+      JSON.stringify(config || {}),
+    ]
   );
   logger.info({ pluginId, installerAddress, granted }, "Plugin installed");
   return rows[0];
@@ -301,7 +327,11 @@ async function invokeInstalledPlugin({ installationId, hookName, payload }) {
     [installationId]
   );
   if (!rows.length) {
-    return { status: "error", errorCode: "NOT_INSTALLED", errorMessage: "installation not found or disabled" };
+    return {
+      status: "error",
+      errorCode: "NOT_INSTALLED",
+      errorMessage: "installation not found or disabled",
+    };
   }
   const installation = rows[0];
   const broker = createBroker({
@@ -338,7 +368,14 @@ async function invokeInstalledPlugin({ installationId, hookName, payload }) {
   await pool.query(
     `INSERT INTO plugin_invocation_logs (installation_id, hook_name, status, duration_ms, error_code, error_message)
      VALUES ($1, $2, $3, $4, $5, $6)`,
-    [installationId, hookName, outcome.status, durationMs, outcome.errorCode || null, outcome.errorMessage || null]
+    [
+      installationId,
+      hookName,
+      outcome.status,
+      durationMs,
+      outcome.errorCode || null,
+      outcome.errorMessage || null,
+    ]
   );
 
   return { ...outcome, durationMs };
@@ -363,7 +400,9 @@ async function dispatchWorkflowEvent(eventName, payload) {
   );
   const results = [];
   for (const row of rows) {
-    results.push(await invokeInstalledPlugin({ installationId: row.id, hookName: eventName, payload }));
+    results.push(
+      await invokeInstalledPlugin({ installationId: row.id, hookName: eventName, payload })
+    );
   }
   return results;
 }

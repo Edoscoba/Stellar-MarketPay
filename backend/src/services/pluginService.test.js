@@ -54,7 +54,8 @@ function createFakePool() {
     }
 
     if (text.startsWith("INSERT INTO plugin_versions")) {
-      const [pluginId, version, manifestJson, source, scanPassed, findingsJson, reviewStatus] = params;
+      const [pluginId, version, manifestJson, source, scanPassed, findingsJson, reviewStatus] =
+        params;
       const id = `version-${versionSeq++}`;
       const row = {
         id,
@@ -93,14 +94,30 @@ function createFakePool() {
       row.review_status = reviewStatus;
       row.reviewed_by = reviewerAddress;
       row.review_notes = notes;
-      return { rows: [{ id: row.id, plugin_id: row.plugin_id, version: row.version, review_status: row.review_status }] };
+      return {
+        rows: [
+          {
+            id: row.id,
+            plugin_id: row.plugin_id,
+            version: row.version,
+            review_status: row.review_status,
+          },
+        ],
+      };
     }
 
     if (
-      text.startsWith("SELECT id FROM plugin_versions WHERE id = $1 AND plugin_id = $2 AND review_status = 'approved'")
+      text.startsWith(
+        "SELECT id FROM plugin_versions WHERE id = $1 AND plugin_id = $2 AND review_status = 'approved'"
+      )
     ) {
       const row = versions.get(params[0]);
-      return { rows: row && row.plugin_id === params[1] && row.review_status === "approved" ? [{ id: row.id }] : [] };
+      return {
+        rows:
+          row && row.plugin_id === params[1] && row.review_status === "approved"
+            ? [{ id: row.id }]
+            : [],
+      };
     }
 
     if (text.startsWith("UPDATE plugins SET active_version_id")) {
@@ -117,13 +134,22 @@ function createFakePool() {
       return { rows: [] };
     }
 
-    if (text.includes("FROM plugins p LEFT JOIN plugin_versions v ON v.id = p.active_version_id") && text.includes("WHERE p.id = $1 AND p.status = 'published'")) {
+    if (
+      text.includes("FROM plugins p LEFT JOIN plugin_versions v ON v.id = p.active_version_id") &&
+      text.includes("WHERE p.id = $1 AND p.status = 'published'")
+    ) {
       const p = plugins.get(params[0]);
       if (!p || p.status !== "published") return { rows: [] };
       const v = versions.get(p.active_version_id);
       return {
         rows: [
-          { id: p.id, visibility: p.visibility, org_address: p.org_address, active_version_id: p.active_version_id, manifest: v.manifest },
+          {
+            id: p.id,
+            visibility: p.visibility,
+            org_address: p.org_address,
+            active_version_id: p.active_version_id,
+            manifest: v.manifest,
+          },
         ],
       };
     }
@@ -144,7 +170,16 @@ function createFakePool() {
         uninstalled_at: null,
       };
       installations.set(key, row);
-      return { rows: [{ id: row.id, plugin_id: row.plugin_id, granted_permissions: row.granted_permissions, installed_at: row.installed_at }] };
+      return {
+        rows: [
+          {
+            id: row.id,
+            plugin_id: row.plugin_id,
+            granted_permissions: row.granted_permissions,
+            installed_at: row.installed_at,
+          },
+        ],
+      };
     }
 
     if (text.startsWith("UPDATE plugin_installations") && text.includes("SET enabled = FALSE")) {
@@ -160,7 +195,9 @@ function createFakePool() {
     }
 
     if (text.startsWith("SELECT i.id, i.plugin_id, i.granted_permissions, i.installer_address")) {
-      const row = [...installations.values()].find((r) => r.id === params[0] && r.enabled && !r.uninstalled_at);
+      const row = [...installations.values()].find(
+        (r) => r.id === params[0] && r.enabled && !r.uninstalled_at
+      );
       if (!row) return { rows: [] };
       const v = versions.get(row.plugin_version_id);
       const p = plugins.get(row.plugin_id);
@@ -187,7 +224,11 @@ function createFakePool() {
     if (text.startsWith("SELECT id, plugin_id, granted_permissions, config, installed_at")) {
       const rows = [...installations.values()]
         .filter((r) => r.installer_address === params[0] && r.enabled && !r.uninstalled_at)
-        .map((r) => ({ ...r, name: plugins.get(r.plugin_id).name, version: versions.get(r.plugin_version_id).version }));
+        .map((r) => ({
+          ...r,
+          name: plugins.get(r.plugin_id).name,
+          version: versions.get(r.plugin_version_id).version,
+        }));
       return { rows };
     }
 
@@ -337,7 +378,11 @@ describe("pluginService — full lifecycle", () => {
     expect(submitted.review_status).toBe("rejected");
 
     await expect(
-      pluginService.reviewPluginVersion({ versionId: submitted.id, approve: true, reviewerAddress: REVIEWER })
+      pluginService.reviewPluginVersion({
+        versionId: submitted.id,
+        approve: true,
+        reviewerAddress: REVIEWER,
+      })
     ).rejects.toThrow(/not found or not pending/);
   });
 
@@ -354,11 +399,21 @@ describe("pluginService — full lifecycle", () => {
   test("NEGATIVE: installing cannot grant a permission the manifest did not declare", async () => {
     const submitted = await pluginService.submitPluginVersion({
       authorAddress: AUTHOR,
-      manifestJson: JSON.stringify(cleanManifest({ id: "scoped-plugin", permissions: ["read:jobs"] })),
+      manifestJson: JSON.stringify(
+        cleanManifest({ id: "scoped-plugin", permissions: ["read:jobs"] })
+      ),
       source: CLEAN_SOURCE,
     });
-    await pluginService.reviewPluginVersion({ versionId: submitted.id, approve: true, reviewerAddress: REVIEWER });
-    await pluginService.publishVersion({ pluginId: "scoped-plugin", versionId: submitted.id, publisherAddress: AUTHOR });
+    await pluginService.reviewPluginVersion({
+      versionId: submitted.id,
+      approve: true,
+      reviewerAddress: REVIEWER,
+    });
+    await pluginService.publishVersion({
+      pluginId: "scoped-plugin",
+      versionId: submitted.id,
+      publisherAddress: AUTHOR,
+    });
 
     await expect(
       pluginService.installPlugin({
@@ -376,8 +431,16 @@ describe("pluginService — full lifecycle", () => {
       manifestJson: JSON.stringify(cleanManifest({ id: "throwing-plugin", permissions: [] })),
       source: throwingSource,
     });
-    await pluginService.reviewPluginVersion({ versionId: submitted.id, approve: true, reviewerAddress: REVIEWER });
-    await pluginService.publishVersion({ pluginId: "throwing-plugin", versionId: submitted.id, publisherAddress: AUTHOR });
+    await pluginService.reviewPluginVersion({
+      versionId: submitted.id,
+      approve: true,
+      reviewerAddress: REVIEWER,
+    });
+    await pluginService.publishVersion({
+      pluginId: "throwing-plugin",
+      versionId: submitted.id,
+      publisherAddress: AUTHOR,
+    });
     const installed = await pluginService.installPlugin({
       pluginId: "throwing-plugin",
       installerAddress: INSTALLER,

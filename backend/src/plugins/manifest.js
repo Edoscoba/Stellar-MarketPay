@@ -109,7 +109,10 @@ function validateManifest(manifest) {
 
   if (extensionPoints?.includes("scheduled_task")) {
     if (typeof manifest.schedule !== "string" || !manifest.schedule.trim()) {
-      fail(errors, "schedule (cron expression) is required when extensionPoints includes scheduled_task");
+      fail(
+        errors,
+        "schedule (cron expression) is required when extensionPoints includes scheduled_task"
+      );
     }
   }
 
@@ -117,7 +120,8 @@ function validateManifest(manifest) {
   if (!Array.isArray(permissions)) {
     fail(errors, "permissions must be an array");
   } else {
-    if (permissions.length > MAX_PERMISSIONS) fail(errors, `at most ${MAX_PERMISSIONS} permissions`);
+    if (permissions.length > MAX_PERMISSIONS)
+      fail(errors, `at most ${MAX_PERMISSIONS} permissions`);
     for (const perm of permissions) {
       const permStr = String(perm);
       const kind = permStr.split(":")[0];

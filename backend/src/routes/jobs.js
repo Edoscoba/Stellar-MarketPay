@@ -631,7 +631,11 @@ router.post("/", jobCreationRateLimiter, verifyJWT, async (req, res, next) => {
     // containment is the sandbox's job (src/plugins/sandbox.js), this is
     // just not letting it anywhere near the request/response cycle.
     require("../services/pluginService")
-      .dispatchWorkflowEvent("job.created", { jobId: job.id, category: job.category, budget: job.budget })
+      .dispatchWorkflowEvent("job.created", {
+        jobId: job.id,
+        category: job.category,
+        budget: job.budget,
+      })
       .catch((err) => {
         require("../utils/logger")
           .createServiceLogger("jobs")
