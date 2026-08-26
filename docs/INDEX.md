@@ -173,6 +173,23 @@ Decisions that shaped Stellar MarketPay's architecture:
 
 ---
 
+### ADR-010: Zero-Knowledge Reputation with Selective Disclosure
+
+**File**: [ADR-010-zk-reputation.md](./ADR-010-zk-reputation.md)
+
+**Decision**: Pedersen commitments + Chaum–Pedersen sigma protocols over BLS12-381 G1 (no trusted setup), anchored in a per-subject Merkle tree, with an on-chain Soroban verifier mirroring the off-chain JS byte-for-byte
+
+**Key Points**:
+
+- Why a sigma-protocol scheme was chosen over a zk-SNARK for v1
+- O(1) revocation via a single `earliestInvalidatedEpoch` scalar
+- Measured on-chain verification cost: cheap for `dispute_free`, not yet viable in one transaction for `rating_threshold`/`earnings_band` — honest numbers, not an assumed yes
+- The contiguous-leaf-range scope decision and what it does and doesn't hide
+
+**Status**: ✅ Accepted
+
+---
+
 ## ❓ FAQ & Help
 
 ### Frequently Asked Questions

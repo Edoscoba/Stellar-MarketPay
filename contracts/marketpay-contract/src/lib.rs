@@ -26,6 +26,12 @@
     unused_variables
 )]
 
+// Needed by src/reputation.rs for dynamic Fiat-Shamir transcript labels and
+// JSON encoding of statement public parameters (`format!`, `alloc::string`,
+// `alloc::vec`) — the rest of this crate has no allocation-heavy code, so
+// this was never linked before.
+extern crate alloc;
+
 use soroban_sdk::{
     contract, contractimpl, contracttype, token, symbol_short, Address, Bytes, BytesN, Env,
     String, Vec,
@@ -36,6 +42,9 @@ use referral::{distribute_tree_rewards, get_children, get_depth, get_parent, reg
 
 pub mod oracle;
 use oracle::MilestoneOracleConfig;
+
+pub mod reputation;
+use reputation::ReputationProofArgs;
 
 // ─── Storage keys ─────────────────────────────────────────────────────────────
 
@@ -2384,6 +2393,48 @@ impl MarketPayContract {
             .instance()
             .get(&DataKey::ArbitrationCase(case_id))
             .expect("Arbitration case not found")
+    }
+
+    // ─── Zero-knowledge reputation (Issue #319) ───────────────────────────────
+    // Thin wrappers around src/reputation.rs — see that module's doc comment
+    // for the design, and docs/ADR-010-zk-reputation.md for the full
+    // rationale, data model, and revocation semantics.
+
+    /// Configure the address authorized to anchor reputation roots and
+    /// register revocations (the platform's issuance service). Admin-only.
+    pub fn set_reputation_issuer(env: Env, admin: Address, issuer: Address) {
+        reputation::set_issuer(&env, &admin, &issuer);
+    }
+
+    /// Anchor a new (epoch, root) checkpoint for `subject`. Issuer-only;
+    /// epochs must be anchored in strictly increasing order per subject.
+    pub fn anchor_reputation_root(env: Env, issuer: Address, subject: Address, epoch: u32, root: BytesN<32>) {
+        reputation::anchor_root(&env, &issuer, &subject, epoch, root);
+    }
+
+    /// Record that a rating first included at `invalidates_from_epoch` has
+    /// been revoked (an appeal was upheld). O(1): see reputation.rs's
+    /// `revoke_from_epoch` doc comment for why a single scalar suffices.
+    pub fn revoke_reputation_from_epoch(env: Env, issuer: Address, subject: Address, invalidates_from_epoch: u32) {
+        reputation::revoke_from_epoch(&env, &issuer, &subject, invalidates_from_epoch);
+    }
+
+    /// The anchored root for `(subject, epoch)`, and whether that epoch is
+    /// still valid (not superseded by a later revocation). `None` if the
+    /// epoch was never anchored or has aged out of the retention window.
+    pub fn get_reputation_epoch(env: Env, subject: Address, epoch: u32) -> Option<(BytesN<32>, bool)> {
+        reputation::resolve_epoch(&env, &subject, epoch)
+    }
+
+    /// Verify a full zero-knowledge reputation proof on-chain: context
+    /// freshness, epoch/root/revocation state, Merkle boundary inclusion,
+    /// and the statement's circuit proof. See `ReputationProofArgs` for the
+    /// field-by-field mapping back to the off-chain proof object this
+    /// mirrors. Returns `false` for any invalid or false-statement proof;
+    /// never panics on adversarial input.
+    pub fn verify_reputation_proof(env: Env, args: ReputationProofArgs) -> bool {
+        let now_ms = env.ledger().timestamp().saturating_mul(1000);
+        reputation::verify_reputation_proof(&env, &args, now_ms)
     }
 }
 
