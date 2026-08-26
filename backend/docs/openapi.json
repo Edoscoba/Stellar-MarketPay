@@ -4461,6 +4461,124 @@
         }
       }
     },
+    "/api/reputation/statements": {
+      "get": {
+        "summary": "List the provable reputation statement kinds",
+        "description": "Describes the four statements a freelancer can prove and a client can require — rating_threshold, completion_count, earnings_band, and dispute_free — with their public parameter shapes and what stays hidden. See docs/ADR-010-zk-reputation.md for the full guarantee in plain language.\n",
+        "tags": ["Reputation"],
+        "responses": {
+          "200": {
+            "description": "Statement catalog"
+          }
+        }
+      }
+    },
+    "/api/reputation/{publicKey}/summary": {
+      "get": {
+        "summary": "Public summary of a subject's anchored reputation state",
+        "description": "The latest epoch, Merkle root, and leaf count for a subject — enough for a verifier to sanity-check a proof's freshness without seeing any underlying rating. Public reputation (GET /api/ratings/:key) remains available unchanged for anyone who prefers it (Issue #319).\n",
+        "tags": ["Reputation"],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publicKey",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Summary"
+          },
+          "404": {
+            "description": "No reputation history yet"
+          }
+        }
+      }
+    },
+    "/api/reputation/{publicKey}/openings": {
+      "get": {
+        "summary": "Fetch your own committed rating openings for client-side proving",
+        "description": "Returns every (value, blinding) pair for the authenticated subject's committed rating history, so a proof can be built entirely client-side without the platform learning which statement, range, or audience was chosen. Only the authenticated subject may fetch their own openings.\n",
+        "tags": ["Reputation"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publicKey",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Openings"
+          },
+          "403": {
+            "description": "Forbidden — not the subject"
+          }
+        }
+      }
+    },
+    "/api/reputation/{publicKey}/prove": {
+      "post": {
+        "summary": "Hosted proving service — build a reputation proof server-side",
+        "description": "Builds a full proof for one of the four statement kinds, over the subject's most recent N non-revoked ratings, bound to the given context (audience/purpose/nonce/expiry). Only the authenticated subject may request a proof about themselves. This endpoint sees the subject's plaintext rating history in the proved range, the chosen statement, and who it is being proved to — see docs/ADR-010-zk-reputation.md, \"Proving paths\", for the full trust-boundary statement. Prefer GET .../openings and client-side proving if the platform should not learn any of that.\n",
+        "tags": ["Reputation"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "publicKey",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Proof built"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "403": {
+            "description": "Forbidden — not the subject"
+          },
+          "422": {
+            "description": "Statement does not hold, or not enough contiguous ratings"
+          }
+        }
+      }
+    },
+    "/api/reputation/verify": {
+      "post": {
+        "summary": "Off-chain verification path for a reputation proof",
+        "description": "Verifies a proof against this platform's epoch/root history without any on-chain settlement — for contexts (e.g. a client screening applicants) that only need a yes/no answer. See PUT /api/jobs/:id/reputation-requirement and the application-time verification in routes/applications.js for the built-in consumer of this same path.\n",
+        "tags": ["Reputation"],
+        "responses": {
+          "200": {
+            "description": "Verification result"
+          },
+          "400": {
+            "description": "Malformed proof"
+          }
+        }
+      }
+    },
     "/api/referrals/info": {
       "get": {
         "summary": "Get referral bonus tier information",
@@ -13481,6 +13599,98 @@
         }
       }
     },
+    "/api/jobs/{id}/reputation-requirement": {
+      "get": {
+        "summary": "Get a job's verifiable reputation requirements",
+        "description": "Zero-knowledge reputation (Issue #319): the statements a client has asked applicants to prove, e.g. \"average rating >= 4.5\" or \"no disputes\". Public — a freelancer needs this to know what to prove.\n",
+        "tags": ["Jobs"],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Requirements"
+          }
+        }
+      },
+      "put": {
+        "summary": "Set a job's verifiable reputation requirements",
+        "description": "Only the job's client may set this. Replaces the full requirement set for the job. Pass an empty array to clear all requirements.\n",
+        "tags": ["Jobs"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["requirements"],
+                "properties": {
+                  "requirements": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["statementKind"],
+                      "properties": {
+                        "statementKind": {
+                          "type": "string",
+                          "enum": [
+                            "rating_threshold",
+                            "completion_count",
+                            "earnings_band",
+                            "dispute_free"
+                          ]
+                        },
+                        "statementParams": {
+                          "type": "object"
+                        },
+                        "required": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Requirements updated"
+          },
+          "403": {
+            "description": "Forbidden — not the job's client"
+          },
+          "404": {
+            "description": "Job not found"
+          }
+        }
+      }
+    },
     "/api/invitations": {
       "get": {
         "summary": "List pending job invitations for the authenticated freelancer",
@@ -21711,6 +21921,59 @@
         }
       }
     },
+    "/api/applications/{id}/reputation-proof": {
+      "post": {
+        "summary": "Attach a zero-knowledge reputation proof to your application",
+        "description": "Zero-knowledge reputation with selective disclosure (Issue #319): a freelancer proves a claim about their history — e.g. average rating >= 4.5 — without exposing individual ratings, amounts or disputes. The proof must have been built with context.audience set to the job's client and context.purpose set to `job-application:{jobId}`; this endpoint verifies that binding itself rather than trusting the caller, so a proof cannot be lifted from one application and replayed on another. Build the proof via POST /api/reputation/{publicKey}/prove (hosted) or client-side using the same statement/circuit modules against your own openings (GET /api/reputation/{publicKey}/openings).\n",
+        "tags": ["Applications"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["proof"],
+                "properties": {
+                  "proof": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Proof recorded (verified may be false — the response says why)"
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "403": {
+            "description": "Forbidden — not this application's freelancer"
+          },
+          "404": {
+            "description": "Application not found"
+          }
+        }
+      }
+    },
     "/api/ai-scorer/score-job-description": {
       "post": {
         "summary": "Score a job description with Claude AI",
@@ -24521,6 +24784,60 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/admin/reputation/commitments/{id}/revoke": {
+      "post": {
+        "summary": "Overturn a rating's zero-knowledge reputation commitment",
+        "description": "Zero-knowledge reputation with selective disclosure (Issue #319): when a rating appeal is upheld, this revokes the rating's committed leaf. The subject's Merkle root advances to a new epoch, and every outstanding proof bound to an epoch at or after the one that first included this rating becomes invalid — both here and on-chain (the Soroban contract's `earliest_invalidated_epoch`). Proofs bound to strictly earlier epochs are unaffected. Admin-only, 2FA-gated.\n",
+        "tags": ["Admin"],
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "reputation_commitments.id (not the rating id)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["reason"],
+                "properties": {
+                  "reason": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Revoked"
+          },
+          "404": {
+            "description": "Commitment not found"
+          },
+          "409": {
+            "description": "Already revoked"
           }
         }
       }

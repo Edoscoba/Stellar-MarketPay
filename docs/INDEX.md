@@ -173,18 +173,18 @@ Decisions that shaped Stellar MarketPay's architecture:
 
 ---
 
-### ADR-011: Plugin Platform for Third-Party Marketplace Extensions
+### ADR-010: Zero-Knowledge Reputation with Selective Disclosure
 
-**File**: [ADR-011-plugin-platform.md](./ADR-011-plugin-platform.md)
+**File**: [ADR-010-zk-reputation.md](./ADR-010-zk-reputation.md)
 
-**Decision**: Sandboxed plugin execution via `child_process.fork()` + a stripped `vm.createContext`, with a mediated capability broker and a sandboxed-iframe UI surface
+**Decision**: Pedersen commitments + Chaum–Pedersen sigma protocols over BLS12-381 G1 (no trusted setup), anchored in a per-subject Merkle tree, with an on-chain Soroban verifier mirroring the off-chain JS byte-for-byte
 
 **Key Points**:
 
-- Why the sandbox uses a forked OS process, not `worker_threads` — a real memory-exhaustion failure mode was found by testing and fixed
-- The disclosed, not-yet-closable network-egress gap for a plugin that deliberately attacks the sandbox, and how it's bounded today
-- Why a plugin can never intercept a wallet signing flow (opaque-origin iframe, not a policy)
-- Registry data model: submission, automated scan gate, review, versioning/rollback, install/uninstall with data removal
+- Why a sigma-protocol scheme was chosen over a zk-SNARK for v1
+- O(1) revocation via a single `earliestInvalidatedEpoch` scalar
+- Measured on-chain verification cost: cheap for `dispute_free`, not yet viable in one transaction for `rating_threshold`/`earnings_band` — honest numbers, not an assumed yes
+- The contiguous-leaf-range scope decision and what it does and doesn't hide
 
 **Status**: ✅ Accepted
 

@@ -2912,4 +2912,103 @@ router.post("/bulk-boost", verifyJWT, jobCreationRateLimiter, async (req, res, n
   }
 });
 
+/**
+ * @swagger
+ * /api/jobs/{id}/reputation-requirement:
+ *   get:
+ *     summary: Get a job's verifiable reputation requirements
+ *     description: >
+ *       Zero-knowledge reputation (Issue #319): the statements a client has
+ *       asked applicants to prove, e.g. "average rating >= 4.5" or "no
+ *       disputes". Public — a freelancer needs this to know what to prove.
+ *     tags: [Jobs]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     responses:
+ *       200: { description: Requirements }
+ */
+router.get("/:id/reputation-requirement", generalJobRateLimiter, async (req, res, next) => {
+  try {
+    const { getJobRequirements } = require("../services/reputationRequirementService");
+    const requirements = await getJobRequirements(req.params.id);
+    res.json({ success: true, data: requirements });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * @swagger
+ * /api/jobs/{id}/reputation-requirement:
+ *   put:
+ *     summary: Set a job's verifiable reputation requirements
+ *     description: >
+ *       Only the job's client may set this. Replaces the full requirement
+ *       set for the job. Pass an empty array to clear all requirements.
+ *     tags: [Jobs]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string, format: uuid }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [requirements]
+ *             properties:
+ *               requirements:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required: [statementKind]
+ *                   properties:
+ *                     statementKind:
+ *                       type: string
+ *                       enum: [rating_threshold, completion_count, earnings_band, dispute_free]
+ *                     statementParams:
+ *                       type: object
+ *                     required:
+ *                       type: boolean
+ *     responses:
+ *       200: { description: Requirements updated }
+ *       403: { description: Forbidden — not the job's client }
+ *       404: { description: Job not found }
+ */
+router.put(
+  "/:id/reputation-requirement",
+  verifyJWT,
+  generalJobRateLimiter,
+  async (req, res, next) => {
+    try {
+      const job = await getJob(req.params.id); // throws 404 if missing
+      if (job.clientAddress !== req.user.publicKey) {
+        return res
+          .status(403)
+          .json({ success: false, error: "Only the job's client can set reputation requirements" });
+      }
+      const { requirements } = req.body || {};
+      if (!Array.isArray(requirements)) {
+        return res.status(400).json({ success: false, error: "requirements must be an array" });
+      }
+      const {
+        setJobRequirements,
+        getJobRequirements,
+      } = require("../services/reputationRequirementService");
+      await setJobRequirements(req.params.id, requirements);
+      const saved = await getJobRequirements(req.params.id);
+      res.json({ success: true, data: saved });
+    } catch (e) {
+      next(e);
+    }
+  }
+);
+
 module.exports = router;
