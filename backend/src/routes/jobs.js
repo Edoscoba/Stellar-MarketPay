@@ -623,6 +623,24 @@ router.post("/", jobCreationRateLimiter, verifyJWT, async (req, res, next) => {
 
     const job = await createJob({ ...req.body, clientAddress: signedAddress });
     res.status(201).json({ success: true, data: job });
+
+    // Plugin platform (Issue #322): fire the job.created workflow hook for
+    // any installed plugin subscribed to it. Fire-and-forget, after the
+    // response is already sent — a slow, timed-out, or crashed plugin must
+    // never add latency or failure risk to job creation itself; that
+    // containment is the sandbox's job (src/plugins/sandbox.js), this is
+    // just not letting it anywhere near the request/response cycle.
+    require("../services/pluginService")
+      .dispatchWorkflowEvent("job.created", {
+        jobId: job.id,
+        category: job.category,
+        budget: job.budget,
+      })
+      .catch((err) => {
+        require("../utils/logger")
+          .createServiceLogger("jobs")
+          .warn({ error: err.message, jobId: job.id }, "Plugin workflow dispatch failed");
+      });
   } catch (e) {
     next(e);
   }
