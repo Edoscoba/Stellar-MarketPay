@@ -136,6 +136,28 @@ pub struct Escrow {
     pub refund_approvals: u32,
 }
 
+impl Escrow {
+    /// What a full release owes: the whole deposit when there are no
+    /// milestones, otherwise whatever milestones remain unpaid.
+    ///
+    /// Shared by every settlement path so that "how much does this escrow
+    /// still owe" has one answer rather than one per entrypoint.
+    pub fn release_amount(&self) -> i128 {
+        if self.milestones.is_empty() {
+            return self.amount;
+        }
+        let mut remaining: i128 = 0;
+        for ms in self.milestones.iter() {
+            if !ms.is_completed {
+                remaining = remaining
+                    .checked_add(ms.amount)
+                    .expect("Arithmetic overflow");
+            }
+        }
+        remaining
+    }
+}
+
 /// Budget commitment for sealed-bid system (Issue #108)
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -220,6 +242,10 @@ pub struct ArbitrationCase {
     pub job_id: String,
     pub arbitrators: Vec<Address>,
     pub votes: Vec<u32>,
+    /// Which arbitrators have already voted. Kept alongside `votes` so that
+    /// "three votes" means three distinct panel members rather than three
+    /// calls from whichever one got there first.
+    pub voters: Vec<Address>,
     pub resolution: u32,
     pub status: u32,
 }
@@ -653,6 +679,29 @@ impl MarketPayContract {
         }
     }
 
+    /// The portion of an escrow's deposit the contract still holds.
+    ///
+    /// For a milestone escrow this is the sum of the milestones not yet paid
+    /// out; for a plain escrow it is the whole amount. Every path that returns
+    /// funds to the client must use this rather than `escrow.amount`: a
+    /// milestone payout moves money out while leaving the status at `Locked`,
+    /// so `escrow.amount` stops being the contract's liability the moment the
+    /// first milestone is released.
+    fn unpaid_remainder(escrow: &Escrow) -> i128 {
+        if escrow.milestones.is_empty() {
+            return escrow.amount;
+        }
+        let mut remaining: i128 = 0;
+        for ms in escrow.milestones.iter() {
+            if !ms.is_completed {
+                remaining = remaining
+                    .checked_add(ms.amount)
+                    .expect("Arithmetic overflow");
+            }
+        }
+        remaining
+    }
+
     fn release_escrow_core(env: Env, job_id: String, mut escrow: Escrow) {
         if escrow.status != EscrowStatus::InProgress && escrow.status != EscrowStatus::Locked {
             panic!("Cannot release escrow in current status");
@@ -800,17 +849,26 @@ impl MarketPayContract {
     }
 
     /// Client approves work and releases funds WITH conversion through DEX.
-    /// This is used when the escrow is in one asset (e.g. USDC) but the freelancer wants another (e.g. XLM).
+    ///
+    /// This is used when the escrow is held in one asset (e.g. USDC) but the
+    /// freelancer wants another (e.g. XLM).
+    ///
+    /// Swapping the payout asset changes *how* the freelancer is paid, not
+    /// what the escrow owes or who may authorise the payment. This entrypoint
+    /// therefore carries exactly the preconditions `release_escrow()` carries
+    /// — including the multisig guard — and settles through the same core, so
+    /// the platform fee and referral distribution cannot be routed around by
+    /// asking for a different asset.
     pub fn release_with_conversion(
         env: Env,
         job_id: String,
         client: Address,
-        _target_token: Address,
+        target_token: Address,
         _min_amount_out: i128,
     ) {
         client.require_auth();
 
-        let mut escrow: Escrow = env
+        let escrow: Escrow = env
             .storage()
             .instance()
             .get(&DataKey::Escrow(job_id.clone()))
@@ -819,84 +877,30 @@ impl MarketPayContract {
         if escrow.client != client {
             panic!("Only the client can release escrow");
         }
-        if escrow.status != EscrowStatus::InProgress && escrow.status != EscrowStatus::Locked {
-            panic!("Cannot release escrow in current status");
+        if escrow.arbitrator.is_some() {
+            panic!("Escrow requires multisig approval — use approve_release()");
         }
 
-        // Calculate remaining amount
-        let mut remaining_amount: i128 = 0;
-        for ms in escrow.milestones.iter() {
-            if !ms.is_completed {
-                remaining_amount = remaining_amount
-                    .checked_add(ms.amount)
-                    .expect("Arithmetic overflow");
-            }
-        }
-        let release_amount = if escrow.milestones.is_empty() {
-            escrow.amount
-        } else {
-            remaining_amount
-        };
+        let converted_amount = escrow.release_amount();
+        let source_token = escrow.token.clone();
 
-        if release_amount > 0 {
-            // [Issue #104] Path Payment / DEX Swap
-            // In a real scenario, we would call a DEX contract here.
-            // For now, we simulate the conversion by transferring the source token
-            // and emitting a conversion event.
-            let token_client = token::Client::new(&env, &escrow.token);
-
-            // In a real implementation with a Soroban DEX:
-            // let dex = DEXClient::new(&env, &DEX_ADDRESS);
-            // dex.swap(&env.current_contract_address(), &escrow.freelancer, &escrow.token, &target_token, &release_amount, &min_amount_out);
-
-            // For this implementation, we perform the transfer and mark as converted
-            token_client.transfer(
-                &env.current_contract_address(),
-                &escrow.freelancer,
-                &release_amount,
-            );
-        }
-
-        // Mark all milestones as completed
-        let mut updated_ms = soroban_sdk::Vec::new(&env);
-        for mut ms in escrow.milestones.iter() {
-            ms.is_completed = true;
-            updated_ms.push_back(ms);
-        }
-        escrow.milestones = updated_ms;
-
-        // Update jobs count
-        let f_jobs: u32 = env
-            .storage()
-            .instance()
-            .get(&DataKey::CompletedJobs(escrow.freelancer.clone()))
-            .unwrap_or(0);
-        env.storage().instance().set(
-            &DataKey::CompletedJobs(escrow.freelancer.clone()),
-            &(f_jobs.checked_add(1).unwrap()),
-        );
-
-        let c_jobs: u32 = env
-            .storage()
-            .instance()
-            .get(&DataKey::CompletedJobs(escrow.client.clone()))
-            .unwrap_or(0);
-        env.storage().instance().set(
-            &DataKey::CompletedJobs(escrow.client.clone()),
-            &(c_jobs.checked_add(1).unwrap()),
-        );
-
-        escrow.status = EscrowStatus::Released;
-        env.storage()
-            .instance()
-            .set(&DataKey::Escrow(job_id.clone()), &escrow);
-        env.storage()
-            .instance()
-            .remove(&DataKey::TimeoutTimestamp(job_id.clone()));
+        // [Issue #104] Path Payment / DEX Swap.
+        //
+        // A real implementation would route the payout through a Soroban DEX:
+        //
+        //   let dex = DEXClient::new(&env, &DEX_ADDRESS);
+        //   dex.swap(&env.current_contract_address(), &escrow.freelancer,
+        //            &escrow.token, &target_token, &release_amount, &min_amount_out);
+        //
+        // Until that lands the payout is made in the source asset and the
+        // requested conversion is recorded as an event, so the settlement
+        // accounting is identical to a plain release and the difference is
+        // visible to indexers rather than hidden in the balances.
+        Self::release_escrow_core(env.clone(), job_id.clone(), escrow);
 
         env.events().publish(
-            (symbol_short!("escrow_rl"), job_id.clone()),
-            (escrow.client.clone(), escrow.freelancer.clone(), release_amount),
+            (symbol_short!("escrow_cv"), job_id),
+            (source_token, target_token, converted_amount),
         );
     }
 
@@ -927,20 +931,39 @@ impl MarketPayContract {
             panic!("Can only refund before work has started");
         }
 
-        // Return funds to client
-        let token_client = token::Client::new(&env, &escrow.token);
-        token_client.transfer(
-            &env.current_contract_address(),
-            &escrow.client,
-            &escrow.amount,
-        );
+        // Return only what the contract still holds for this escrow. Refunding
+        // `escrow.amount` after `partial_release()` has already paid a
+        // milestone out pays more than was ever deposited, and the excess is
+        // taken from the balances of every other escrow the contract holds.
+        let refund_amount = Self::unpaid_remainder(&escrow);
+
+        if refund_amount > 0 {
+            let token_client = token::Client::new(&env, &escrow.token);
+            token_client.transfer(
+                &env.current_contract_address(),
+                &escrow.client,
+                &refund_amount,
+            );
+        }
+
+        // Whatever was not refunded was already paid out as milestones, so the
+        // escrow owes nothing further either way.
+        let mut settled_ms = soroban_sdk::Vec::new(&env);
+        for mut ms in escrow.milestones.iter() {
+            ms.is_completed = true;
+            settled_ms.push_back(ms);
+        }
+        escrow.milestones = settled_ms;
 
         escrow.status = EscrowStatus::Refunded;
         env.storage().instance().set(&DataKey::Escrow(job_id.clone()), &escrow);
+        env.storage()
+            .instance()
+            .remove(&DataKey::TimeoutTimestamp(job_id.clone()));
 
         env.events().publish(
             (symbol_short!("escrow_rf"), job_id.clone()),
-            (escrow.client.clone(), escrow.freelancer.clone(), escrow.amount),
+            (escrow.client.clone(), escrow.freelancer.clone(), refund_amount),
         );
     }
 
@@ -1041,20 +1064,42 @@ impl MarketPayContract {
             panic!("Timeout period has not expired yet");
         }
 
-        // Return funds to client
-        let token_client = token::Client::new(&env, &escrow.token);
-        token_client.transfer(
-            &env.current_contract_address(),
-            &escrow.client,
-            &escrow.amount,
-        );
+        // A timeout is still a refund, so it is bound by the same two rules as
+        // `refund_escrow()`: it returns only what the contract still holds (see
+        // `unpaid_remainder`), and on a multisig escrow it does not let the
+        // client act alone. A timeout does not dissolve the arbitrator's stake
+        // in the outcome — it just means the client may now ask for one.
+        if escrow.arbitrator.is_some() {
+            panic!("Escrow requires multisig approval — use approve_refund()");
+        }
+
+        let refund_amount = Self::unpaid_remainder(&escrow);
+
+        if refund_amount > 0 {
+            let token_client = token::Client::new(&env, &escrow.token);
+            token_client.transfer(
+                &env.current_contract_address(),
+                &escrow.client,
+                &refund_amount,
+            );
+        }
+
+        let mut settled_ms = soroban_sdk::Vec::new(&env);
+        for mut ms in escrow.milestones.iter() {
+            ms.is_completed = true;
+            settled_ms.push_back(ms);
+        }
+        escrow.milestones = settled_ms;
 
         escrow.status = EscrowStatus::Refunded;
         env.storage().instance().set(&DataKey::Escrow(job_id.clone()), &escrow);
+        env.storage()
+            .instance()
+            .remove(&DataKey::TimeoutTimestamp(job_id.clone()));
 
         env.events().publish(
             (symbol_short!("escrow_rf"), job_id.clone()),
-            (escrow.client.clone(), escrow.freelancer.clone(), escrow.amount),
+            (escrow.client.clone(), escrow.freelancer.clone(), refund_amount),
         );
     }
 
@@ -1433,7 +1478,14 @@ impl MarketPayContract {
         if escrow.status == EscrowStatus::Released || escrow.status == EscrowStatus::Refunded {
             panic!("Cannot dispute a resolved escrow");
         }
-        
+        // Re-disputing an escrow that is already in dispute changes nothing but
+        // emits another event, which leaves indexers and the notification path
+        // reporting a dispute that did not happen. Found by the invariant
+        // fuzzer as a divergence from the specification (seed 45).
+        if escrow.status == EscrowStatus::Disputed {
+            panic!("Escrow is already in dispute");
+        }
+
         escrow.status = EscrowStatus::Disputed;
         env.storage()
             .instance()
@@ -1458,6 +1510,14 @@ impl MarketPayContract {
 
         if escrow.client != client {
             panic!("Only the client can release a milestone");
+        }
+        // Nominating an arbitrator is a statement that no single party moves
+        // this escrow's funds, and a milestone payout moves funds. Without this
+        // guard the multisig is bypassable on any escrow that has milestones:
+        // the client releases each milestone in turn and reaches Released
+        // having collected no approvals at all.
+        if escrow.arbitrator.is_some() {
+            panic!("Escrow requires multisig approval — use approve_release()");
         }
         if escrow.status != EscrowStatus::InProgress
             && escrow.status != EscrowStatus::Locked
@@ -1597,6 +1657,15 @@ impl MarketPayContract {
             .instance()
             .get(&DataKey::Escrow(job_id.clone()))
             .expect("Escrow not found");
+
+        // Nominating an arbitrator is a statement that no single party moves
+        // this escrow's funds, and a milestone payout moves funds. Without this
+        // guard the multisig is bypassable on any escrow that has milestones:
+        // the client releases each milestone in turn and reaches Released
+        // having collected no approvals at all.
+        if escrow.arbitrator.is_some() {
+            panic!("Escrow requires multisig approval — use approve_release()");
+        }
 
         if escrow.status != EscrowStatus::InProgress
             && escrow.status != EscrowStatus::Locked
@@ -2316,6 +2385,7 @@ impl MarketPayContract {
             job_id,
             arbitrators: chosen,
             votes: Vec::new(&env),
+            voters: Vec::new(&env),
             resolution: 0,
             status: 0,
         };
@@ -2345,9 +2415,17 @@ impl MarketPayContract {
         if !case.arbitrators.contains(&arbitrator) {
             panic!("Only selected arbitrators can vote");
         }
+        // Without a per-voter record the three votes are just three calls, and
+        // a single selected arbitrator can cast all of them — which makes the
+        // median-of-three resolution below their unilateral decision rather
+        // than a panel's.
+        if case.voters.contains(&arbitrator) {
+            panic!("Arbitrator has already voted on this case");
+        }
         if case.votes.len() >= 3 {
             panic!("All votes already submitted");
         }
+        case.voters.push_back(arbitrator.clone());
         case.votes.push_back(client_percent);
         env.storage()
             .instance()
@@ -2384,8 +2462,93 @@ impl MarketPayContract {
             .instance()
             .set(&DataKey::ArbitrationCase(case_id), &case);
 
+        // Settle the escrow the case was opened over.
+        //
+        // Until this existed, `raise_dispute()` was a one-way door: it moves an
+        // escrow to `Disputed`, every settlement path except the milestone one
+        // refuses that status, and resolving the arbitration only recorded a
+        // percentage. Either participant could therefore strand the funds
+        // permanently with a single call, and the panel's decision had no
+        // effect on where the money went.
+        Self::settle_arbitrated_escrow(&env, &case.job_id, case.resolution);
+
         env.events()
             .publish((symbol_short!("arb_res"), case_id), case.resolution);
+    }
+
+    /// Pay out a disputed escrow according to the panel's resolution.
+    ///
+    /// `client_percent` is the share returned to the client; the freelancer
+    /// receives the remainder. The split is taken over what the contract still
+    /// holds for this escrow, and the freelancer's share is computed as the
+    /// *residual* rather than as a second percentage, so the two shares
+    /// reconstruct the balance exactly however the division truncates.
+    fn settle_arbitrated_escrow(env: &Env, job_id: &String, client_percent: u32) {
+        let mut escrow: Escrow = match env
+            .storage()
+            .instance()
+            .get(&DataKey::Escrow(job_id.clone()))
+        {
+            Some(e) => e,
+            // An arbitration case can name a job that has no escrow — the case
+            // is still resolved, there is simply nothing to pay out.
+            None => return,
+        };
+
+        // A settled escrow has already distributed its funds. Paying out again
+        // would take the money from other escrows' balances.
+        if escrow.status == EscrowStatus::Released || escrow.status == EscrowStatus::Refunded {
+            return;
+        }
+
+        let remaining = Self::unpaid_remainder(&escrow);
+
+        if remaining > 0 {
+            let client_share = remaining
+                .checked_mul(client_percent as i128)
+                .expect("Arithmetic overflow")
+                .checked_div(100)
+                .expect("Arithmetic overflow");
+            let freelancer_share = remaining
+                .checked_sub(client_share)
+                .expect("Arithmetic underflow");
+
+            let token_client = token::Client::new(env, &escrow.token);
+            if client_share > 0 {
+                token_client.transfer(
+                    &env.current_contract_address(),
+                    &escrow.client,
+                    &client_share,
+                );
+            }
+            if freelancer_share > 0 {
+                token_client.transfer(
+                    &env.current_contract_address(),
+                    &escrow.freelancer,
+                    &freelancer_share,
+                );
+            }
+
+            env.events().publish(
+                (symbol_short!("arb_paid"), job_id.clone()),
+                (escrow.client.clone(), escrow.freelancer.clone(), client_share, freelancer_share),
+            );
+        }
+
+        let mut settled_ms = soroban_sdk::Vec::new(env);
+        for mut ms in escrow.milestones.iter() {
+            ms.is_completed = true;
+            settled_ms.push_back(ms);
+        }
+        escrow.milestones = settled_ms;
+
+        escrow.status = EscrowStatus::Released;
+        env.storage()
+            .instance()
+            .set(&DataKey::Escrow(job_id.clone()), &escrow);
+        env.storage()
+            .instance()
+            .remove(&DataKey::TimeoutTimestamp(job_id.clone()));
     }
 
     pub fn get_arbitration_case(env: Env, case_id: u32) -> ArbitrationCase {
@@ -2522,8 +2685,8 @@ mod tests {
         client.resolve_proposal(&pid);
 
         let final_prop = client.get_proposal(&pid);
-        assert_eq!(final_prop.resolved, true);
-        assert_eq!(final_prop.result, false); // 1 to 1 is not majority
+        assert!(final_prop.resolved);
+        assert!(!final_prop.result); // 1 to 1 is not majority
     }
 
     #[test]
@@ -2554,7 +2717,7 @@ mod timeout_tests {
     use super::*;
     use soroban_sdk::{testutils::Address as _, testutils::Ledger, Address, Env, String};
 
-    fn setup_contract(env: &Env) -> (MarketPayContractClient, Address, Address, Address, Address) {
+    fn setup_contract(env: &Env) -> (MarketPayContractClient<'_>, Address, Address, Address, Address) {
         let id = env.register(MarketPayContract, ());
         let client = MarketPayContractClient::new(env, &id);
         let admin = Address::generate(env);
@@ -2861,8 +3024,8 @@ mod regression_tests {
         let escrow = contract_client.get_escrow(&job_id);
         assert_eq!(escrow.status, EscrowStatus::Disputed);
         assert_eq!(token_client.balance(&freelancer), 400);
-        assert_eq!(escrow.milestones.get(0).unwrap().is_completed, true);
-        assert_eq!(escrow.milestones.get(1).unwrap().is_completed, false);
+        assert!(escrow.milestones.get(0).unwrap().is_completed);
+        assert!(!escrow.milestones.get(1).unwrap().is_completed);
 
         // Release final milestone
         contract_client.partial_release(&job_id, &1u32, &client.clone());
@@ -2959,7 +3122,7 @@ mod event_tests {
     use soroban_sdk::testutils::Events;
     use soroban_sdk::{Address, Env, String, Vec};
 
-    fn setup(env: &Env) -> (MarketPayContractClient, Address, Address, Address) {
+    fn setup(env: &Env) -> (MarketPayContractClient<'_>, Address, Address, Address) {
         env.mock_all_auths();
         let id = env.register(MarketPayContract, ());
         let client = MarketPayContractClient::new(env, &id);
@@ -3135,7 +3298,7 @@ mod sealed_bid_tests {
         env.crypto().sha256(&payload).into()
     }
 
-    fn setup(env: &Env) -> (MarketPayContractClient, Address, Address, String) {
+    fn setup(env: &Env) -> (MarketPayContractClient<'_>, Address, Address, String) {
         env.mock_all_auths();
         let id = env.register(MarketPayContract, ());
         let client = MarketPayContractClient::new(env, &id);
@@ -3209,7 +3372,7 @@ mod deliverable_oracle_tests {
     use super::*;
     use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 
-    fn setup(env: &Env) -> (MarketPayContractClient, Address, Address, Address, Address) {
+    fn setup(env: &Env) -> (MarketPayContractClient<'_>, Address, Address, Address, Address) {
         env.mock_all_auths();
         let id = env.register(MarketPayContract, ());
         let contract = MarketPayContractClient::new(env, &id);
@@ -3297,7 +3460,7 @@ mod milestone_oracle_tests {
     use oracle::compute_verification_hash;
     use soroban_sdk::{testutils::Address as _, Address, Bytes, Env, String, Vec};
 
-    fn setup(env: &Env) -> (MarketPayContractClient, Address, Address, Address, Address) {
+    fn setup(env: &Env) -> (MarketPayContractClient<'_>, Address, Address, Address, Address) {
         env.mock_all_auths();
         let id = env.register(MarketPayContract, ());
         let contract = MarketPayContractClient::new(env, &id);
@@ -3440,7 +3603,7 @@ mod multisig_tests {
     /// (client, freelancer, arbitrator), already moved to InProgress.
     fn setup_multisig_escrow(
         env: &Env,
-    ) -> (MarketPayContractClient, Address, Address, Address, Address, String) {
+    ) -> (MarketPayContractClient<'_>, Address, Address, Address, Address, String) {
         env.mock_all_auths();
         let id = env.register(MarketPayContract, ());
         let contract = MarketPayContractClient::new(env, &id);

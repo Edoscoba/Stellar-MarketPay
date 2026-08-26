@@ -1,105 +1,119 @@
-# PR: Build Component Library with Storybook, Design Tokens, Shared Primitives & Visual Regression Testing
-
-closes #251
-
 ## Summary
 
-This PR establishes an isolated component library environment with Storybook 8 for Next.js, extracts and documents design tokens as the source of truth for both light and dark themes, consolidates duplicated UI patterns into shared primitives, adds automated WCAG 2.1 AA accessibility checks, and implements visual regression testing on CI.
+This PR adds the formal verification subsystem for the Soroban escrow contract and fixes the CI issues needed to run it reliably.
 
-### Key Achievements:
+The change introduces:
 
-- **Storybook Infrastructure**: Configured `@storybook/nextjs` with custom context decorators for `ThemeContext` (dark/light theme switching), `PriceContext` (XLM/USD pricing mode), `i18n` (en/es/fr/pt language detection & toggle), `StellarAccountContext`, and `ToastProvider`.
-- **100% Component Story Coverage**: Added comprehensive story files for all 48 components across `frontend/components` and `frontend/components/Onboarding/`, covering default, loading/skeleton, empty, error, and long-content overflow states.
-- **Design Tokens Extraction**: Centralized tokens in `frontend/styles/tokens.ts` (colors, typography, spacing, radii, shadows, z-indices) and documented in `docs/design-tokens.md` and interactive Storybook doc `frontend/stories/DesignTokens.stories.tsx`.
-- **Shared UI Primitives**: Consolidated common UI patterns into reusable primitives under `frontend/components/primitives/`:
-  - `Button` (5 variants, 3 sizes, loading spinner, 44px touch targets)
-  - `Badge` (semantic status colors: open, progress, complete, cancelled, disputed, gold, neutral)
-  - `Modal` (accessible dialog with focus trap, backdrop blur, Escape key dismiss)
-  - `Input` & `Textarea` (form fields with label, error, helper text, and character counter)
-  - `Card` (standard card container with header, footer, hover states)
-  - `Skeleton` (text, circle, rectangle, card loading states)
-  - `StatCard` (metric display card with trend indicators and color schemes)
-- **Automated Accessibility Testing**: Configured `@storybook/addon-a11y` and added automated `axe-core` test suite in `frontend/__tests__/accessibility.test.tsx` ensuring zero serious/critical WCAG violations.
-- **Visual Regression Testing**: Added Jest story snapshot regression suite (`frontend/__tests__/stories.snapshot.test.tsx`) and Playwright visual screenshot suite (`frontend/tests/visual-regression.spec.ts`).
-- **CI/CD Integration**: Updated `.github/workflows/ci.yml` to build Storybook (`npm run build-storybook`), upload `storybook-static` as a reviewable artifact, run accessibility checks, and execute visual tests.
-- **Contribution Standards**: Documented component contribution rules in `CONTRIBUTING.md` requiring every new component to ship with stories and adhere to design tokens.
+- a new `contracts/marketpay-spec` crate containing:
+  - formal invariants for value conservation, exact settlement, authorisation, no dust, and single settlement
+  - the escrow transition relation, including multisig and arbitration paths
+  - an executable reference model
+  - bounded model checking and Kani proof harnesses
+- new contract-side verification suites in `contracts/marketpay-contract/tests/`:
+  - differential tests against the specification model
+  - committed regression tests for counterexamples/findings
+  - invariant-guided fuzzing
+- published audit-facing documentation:
+  - `docs/SPECIFICATION.md`
+  - `docs/VERIFICATION.md`
+- CI wiring for the verification workflow in `.github/workflows/verification.yml`
 
----
+It also fixes two immediate CI blockers:
 
-## Technical Details & Architecture
+1. `Party::Panel` was added to the specification but not handled in the shared contract test harness, which broke all integration-style contract verification tests at compile time.
+2. The Kani workflow attempted to parse `kani-list.json` without ever creating the file. The workflow now writes the harness list to disk before reading it.
 
-### 1. Decorators in Storybook Preview
+## Type of change
 
-`.storybook/preview.tsx` injects all essential application contexts into every story:
+- [x] Bug fix
+- [ ] New feature
+- [x] Documentation
+- [x] Refactor or maintenance
+- [x] Smart contract change
 
-```tsx
-<I18nextProvider i18n={i18next}>
-  <ThemeProvider>
-    <PriceProvider>
-      <StellarAccountProvider>
-        <ToastProvider>
-          <Story />
-        </ToastProvider>
-      </StellarAccountProvider>
-    </PriceProvider>
-  </ThemeProvider>
-</I18nextProvider>
-```
+## Related issue
 
-### 2. Design Tokens Schema
+Closes #<!-- add issue number -->
 
-Defined in `frontend/styles/tokens.ts`:
+## Scope and impact
 
-- **Colors**: Brand Gold (`market.50` - `market.900`), Brand Neutral (`ink.500` - `ink.950`), Semantic Status (`success`, `warning`, `error`, `info`, `purple`), Theme variables (`light` and `dark`).
-- **Typography**: Display (`Playfair Display`), Body (`DM Sans`), Mono (`JetBrains Mono`), scale (`xs` to `4xl`).
-- **Spacing & Radii**: 4px scale, 44px min touch target, `sm` (4px) to `2xl` (16px) & `full`.
+- [ ] Frontend
+- [ ] Backend or API
+- [x] Soroban contract
+- [ ] Database or migration
+- [ ] Documentation only
 
----
+Compatibility impact: none intended at the external API level. This change adds specification, verification, CI, and regression coverage around existing escrow behavior, plus fixes implementation/spec mismatches surfaced by that work.
 
-## Local CI & Testing Commands
+## Testing
 
-Run these terminal commands in `frontend/` before pushing:
+- [ ] Tested locally on Testnet, or not applicable
+- [x] No TypeScript / Rust errors, or not applicable
+- [x] Docs updated if needed, or not applicable
 
-```bash
-# 1. Run unit & snapshot tests
-npm test
+Local validation completed on Wednesday, August 26, 2026:
 
-# 2. Run automated accessibility checks
-npm run test:a11y
+- `contracts/marketpay-spec`
+  - `cargo clippy --all-targets -- -D warnings`
+  - `cargo check --no-default-features`
+  - `cargo test --release -- --nocapture`
+- `contracts/marketpay-contract`
+  - `cargo test --features std`
+  - `cargo clippy --all-targets --features std -- -D warnings`
+  - `cargo check --target wasm32-unknown-unknown`
+  - `cargo audit --ignore RUSTSEC-2020-0071`
+- `frontend`
+  - `npm test`
+  - `npm run test:a11y`
+  - `npm run type-check`
+  - `npm run lint`
+  - `npm run build`
+- `backend`
+  - `npm run lint`
+  - `npm run build`
+  - Node 24 plugin sandbox/service tests pass
 
-# 3. Run TypeScript type checks
-npm run type-check
+Known local limitation:
 
-# 4. Run ESLint lint checks
-npm run lint
+- the full backend integration suite depends on CI-style Postgres/Redis service availability and valid local test DB auth; on this host those tests fail with `password authentication failed for user "test"`, so they should be judged from CI rather than this workstation.
 
-# 5. Build static Storybook bundle
-npm run build-storybook
+## Validation
 
-# 6. Run Next.js production build
-npm run build
+- [x] Unit or integration tests run, or not applicable with an explanation
+- [x] Frontend accessibility checked, or not applicable
+- [x] Backend/API behavior checked, or not applicable
+- [x] Soroban contract tests and clippy run, or not applicable
+- [x] Documentation and examples checked
 
-# 7. Run visual regression tests (requires dev server / mock mode)
-npm run test:visual
-```
+## Compatibility and operations
 
-In root directory:
+- [x] No breaking changes
+- [ ] Breaking changes are documented below
+- [x] Database or storage migrations are backward compatible, or the migration plan is documented below
+- [x] Deployment, configuration, or rollback notes are included below when needed
 
-```bash
-# Prettier check & format
-npm run format:check
-npm run format
-```
+Deployment/configuration notes:
 
----
+- verification is split by cost:
+  - bounded model checking, differential tests, regressions, and pull-request-budget fuzzing run in CI
+  - Kani and deeper fuzzing run on schedule, manual dispatch, and explicitly labelled PRs
+- changing a fund-moving contract entrypoint now requires corresponding specification updates
+- counterexamples are meant to be committed back as regression tests
 
-## Verification Plan
+Rollback:
 
-- [x] All 48 components have corresponding `.stories.tsx` files.
-- [x] Storybook context decorators properly supply theme, price, and i18n contexts.
-- [x] Automated accessibility test suite runs axe-core with zero serious/critical violations.
-- [x] Jest story snapshot test verifies component structure and catches regression diffs.
-- [x] Design tokens documented in `docs/design-tokens.md` and `frontend/styles/tokens.ts`.
-- [x] `CONTRIBUTING.md` updated with component contribution rules.
-- [x] `README.md` updated with Storybook badge and component library links.
-- [x] CI workflow builds Storybook and uploads static artifacts on pull requests.
+- revert this PR to remove the specification crate, verification workflow, and regression suites
+- no storage migration rollback is required
+
+## Screenshots
+
+Not applicable.
+
+## Additional context
+
+- The branch fixes the immediate compile break around `Party::Panel` in `contracts/marketpay-contract/tests/harness.rs`.
+- The branch fixes the verification workflow harness discovery bug in `.github/workflows/verification.yml`.
+- If reviewers want a sequence-of-PR landing strategy, this branch can be split conceptually into:
+  1. specification + docs
+  2. differential/regression/fuzz suites
+  3. CI wiring

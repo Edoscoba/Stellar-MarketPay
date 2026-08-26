@@ -136,8 +136,14 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - run: cargo check --target wasm32-unknown-unknown
+      # Runs the unit tests in `src/lib.rs` and the verification suites in
+      # `tests/` — differential, regressions and invariant fuzzing. See
+      # docs/VERIFICATION.md.
       - run: cargo test --features std
-      - run: cargo clippy -- -D warnings
+      # `--all-targets --features std` rather than the bare invocation: without
+      # it clippy only sees the library, and the eleven lints living in the
+      # test code never failed the build.
+      - run: cargo clippy --all-targets --features std -- -D warnings
       - run: cargo install cargo-audit --locked
       - run: cargo audit --ignore RUSTSEC-2020-0071
       - run: cargo build --target wasm32-unknown-unknown --release

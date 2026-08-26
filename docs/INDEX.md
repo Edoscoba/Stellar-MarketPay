@@ -28,6 +28,15 @@ Welcome to Stellar MarketPay documentation. This index helps you find what you n
 - **[Environment Variables](./environment-variables.md)** - Single source of truth for runtime config
 - **[CDN Strategy](./CDN_STRATEGY.md)** - Multi-CDN edge caching, event-driven invalidation, cache-key/TTL strategy, stampede protection (decision recorded in [ADR-007](./ADR-007-multi-cdn-edge-strategy.md))
 
+### Formal Verification
+
+The escrow contract holds user funds. These two documents state what it
+guarantees and how much of that has actually been established — including, at
+length, what has not.
+
+- **[Escrow Specification](./SPECIFICATION.md)** - The formal invariants, the legal transition relation, per-entrypoint pre/postconditions, and the ten findings where the design and the implementation disagreed
+- **[Verification Approach and Limitations](./VERIFICATION.md)** - Tooling evaluated and why, what each technique establishes, results, and the bounds every claim is subject to
+
 ### API Documentation
 
 - **[API Documentation](./API_DOCUMENTATION.md)** - REST API endpoints

@@ -7,7 +7,14 @@ license = "MIT"
 resolver = "2"
 
 [lib]
-crate-type = ["cdylib"]
+# `rlib` alongside `cdylib` so the crate can be linked by the differential
+# tests in `tests/`, which drive the real contract and the reference model in
+# `../marketpay-spec` through the same call sequences and compare the results.
+# A `cdylib`-only crate cannot be depended on by an integration test, which is
+# why every test in this crate used to live inside `src/lib.rs`. The wasm
+# build is unaffected: `cargo build --target wasm32-unknown-unknown` still
+# emits the same `cdylib`.
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 # "alloc": src/reputation.rs (Issue #319) uses `format!`/`alloc::string`/
@@ -39,6 +46,9 @@ ethnum = "1.5.3"
 
 [dev-dependencies]
 soroban-sdk = { version = "=22.0.0", default-features = false, features = ["testutils"] }
+# The formal specification and reference model. A dev-dependency, not a
+# dependency: none of it is compiled into the deployed wasm.
+marketpay-spec = { path = "../marketpay-spec" }
 
 [features]
 std = ["stellar-xdr/std"]
